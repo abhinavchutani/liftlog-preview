@@ -4,6 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>LiftLog · interactive preview</title>
+  <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#08090b">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -58,8 +64,8 @@
     button { cursor: pointer; }
     a { color: inherit; }
     .disp { font-family: 'Barlow Condensed', 'Inter', sans-serif; font-weight: 700; letter-spacing: -.01em; }
-    .ic { width: 20px; height: 20px; stroke-width: 2px; display: block; flex: none; }
-    .ic-sm { width: 15px; height: 15px; stroke-width: 2.4px; }
+    .ic { width: 20px; height: 20px; display: block; flex: none; }
+    .ic-sm { width: 15px; height: 15px; }
     .ic-lg { width: 26px; height: 26px; }
 
     .app-shell { width: min(100%, 430px); min-height: 100vh; background: var(--shell); box-shadow: 0 0 0 1px #1c2027, var(--shadow-lg); position: relative; overflow: hidden; isolation: isolate; }
@@ -127,7 +133,10 @@
     .stat-label { display: block; color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .08em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; }
     .stat-value { display: block; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 22px; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .stat-caption { color: var(--muted); font-size: 10px; }
-    .history-row { padding: 10px 4px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid var(--line-soft); border-radius: var(--r-sm); }
+    .history-row { padding: 10px 4px; display: flex; gap: 10px; align-items: center; border-bottom: 1px solid var(--line-soft); border-radius: var(--r-sm); }
+    .history-delete { flex: none; border: 0; background: transparent; color: var(--muted); width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; transition: color .15s, background .15s, transform .15s var(--ease-standard); }
+    .history-delete:hover { color: var(--danger); background: rgba(255,107,107,.12); }
+    .history-delete:active { transform: scale(.88); }
     .history-row:last-child { border-bottom: 0; }
     .history-icon { width: 42px; height: 42px; border-radius: 13px; background: var(--surface-2); display: grid; place-items: center; color: var(--ember); flex: none; }
     .history-copy { flex: 1; min-width: 0; }
@@ -317,7 +326,8 @@
     @keyframes float { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(10px,-16px) scale(1.06); } }
     @media (prefers-reduced-motion: reduce) { .mesh i { animation: none; } }
     .onboarding > * { position: relative; z-index: 1; }
-    .onboarding-mark { width: 54px; height: 54px; display: grid; place-items: center; border-radius: 17px; color: #fff; background: linear-gradient(135deg, var(--ember), var(--rose)); font-weight: 800; font-size: 22px; box-shadow: var(--shadow-ember); font-family: 'Barlow Condensed', sans-serif; }
+    .onboarding-mark { width: 54px; height: 54px; display: block; border-radius: 17px; box-shadow: var(--shadow-ember); overflow: hidden; }
+    .onboarding-mark img { width: 100%; height: 100%; display: block; }
     .onboarding h1 { font-size: 44px; max-width: 330px; margin-top: 36px; }
     .onboarding h1 em { color: var(--ember); font-style: normal; }
     .onboarding-copy { color: var(--muted); max-width: 315px; line-height: 1.55; margin-top: 16px; font-size: 14px; }
@@ -345,6 +355,8 @@
     .library-copy strong, .library-copy span { display: block; }
     .library-copy strong { font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .library-copy span { color: var(--muted); font-size: 11px; margin-top: 3px; }
+    .custom-tag { font-style: normal; font-size: 8px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--mint); background: var(--mint-soft); border-radius: 99px; padding: 3px 6px; margin-left: 5px; vertical-align: middle; }
+    select.library-search { appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23868d99' stroke-width='2'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
     .timeline-card { padding: 17px; }
     .timeline { margin-top: 17px; position: relative; padding-left: 19px; }
     .timeline::before { content: ""; position: absolute; top: 3px; bottom: 3px; left: 5px; width: 1px; background: linear-gradient(var(--ember), var(--line)); }
@@ -453,7 +465,6 @@
   <main class="app-shell" id="app"></main>
   <div class="toast" id="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/animejs@4.4.1/lib/anime.iife.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/lucide@0.462.0/dist/umd/lucide.js"></script>
   <script>
     const exercises = [
       // Chest
@@ -565,9 +576,9 @@
       { id: 'full', name: 'Full Body', description: 'Balanced · 5 exercises', program: 'Full Body', count: 5, last: 'Last Monday', color: '#ffb648' },
     ];
     const seedHistory = [
-      { name: 'Upper A', meta: 'Yesterday · 48 min', metric: '12,480 kg', pr: '+2 PRs' },
-      { name: 'Lower A', meta: 'Wed · 56 min', metric: '9,820 kg', pr: '' },
-      { name: 'Full Body', meta: 'Mon · 44 min', metric: '8,940 kg', pr: '+1 PR' },
+      { id: 'seed-1', name: 'Upper A', meta: 'Yesterday · 48 min', metric: '12,480 kg', pr: '+2 PRs' },
+      { id: 'seed-2', name: 'Lower A', meta: 'Wed · 56 min', metric: '9,820 kg', pr: '' },
+      { id: 'seed-3', name: 'Full Body', meta: 'Mon · 44 min', metric: '8,940 kg', pr: '+1 PR' },
     ];
     const progressRanges = {
       '4 weeks': { prs: '4', days: '12', volume: '28,640', delta: '+8%', start: '4 weeks ago', workouts: '12 workouts', sets: '124 sets', bars: [48, 58, 42, 68, 56, 74, 65, 82], muscles: [['Back', 8, '#5b8def'], ['Chest', 7, '#ff5a36'], ['Quads', 6, '#ffb648'], ['Shoulders', 5, '#a78bfa'], ['Hamstrings', 4, '#ff6fa5']], timeline: [['Week 4 · now', 'Upper A · 82.5 → 85 kg bench', '+1 PR · 7,420 kg volume'], ['Week 2', 'Consistency came back', '3 training days · 6,180 kg volume'], ['Week 1', 'Baseline captured', '2 workouts · 5,920 kg volume']] },
@@ -576,8 +587,8 @@
       'All time': { prs: '71', days: '412', volume: '892,440', delta: '+31%', start: 'first session', workouts: '412 workouts', sets: '4,920 sets', bars: [26, 35, 32, 44, 49, 58, 55, 68, 72, 83, 88, 100], muscles: [['Back', 214, '#5b8def'], ['Chest', 198, '#ff5a36'], ['Quads', 176, '#ffb648'], ['Shoulders', 142, '#a78bfa'], ['Hamstrings', 118, '#ff6fa5']], timeline: [['Today', '71 lifetime PRs logged', '892,440 kg total volume'], ['Last year', 'Training became consistent', '176 training days · 48 PRs'], ['First 12 weeks', 'Baseline became a plan', '28 workouts · +18% volume']] },
     };
     const tourFeatures = [
-      { number: '01 / LOG FAST', glyph: 'zap', title: 'Never lose the last set.', copy: 'Previous performance stays beside every set, so progressive overload is a decision—not a memory test.' },
-      { number: '02 / SEE THE TREND', glyph: 'activity', title: 'Know if you are actually moving.', copy: 'Switch from four weeks to all time, then drill into an exercise to see strength, volume, and intensity over time.' },
+      { number: '01 / LOG FAST', glyph: 'lightning', title: 'Never lose the last set.', copy: 'Previous performance stays beside every set, so progressive overload is a decision—not a memory test.' },
+      { number: '02 / SEE THE TREND', glyph: 'pulse', title: 'Know if you are actually moving.', copy: 'Switch from four weeks to all time, then drill into an exercise to see strength, volume, and intensity over time.' },
       { number: '03 / STAY IN THE FLOW', glyph: 'clock', title: 'Less phone time. More training.', copy: `Supersets, rest timers, quick notes, and a ${exercises.length}-movement library keep the session moving.` },
     ];
     const state = {
@@ -597,6 +608,7 @@
       exerciseRange: '3M',
       selectedExercise: 'bench',
       libraryQuery: '',
+      pickerQuery: '',
       libraryCategory: 'All',
       history: JSON.parse(localStorage.getItem('liftlog_history') || 'null') || seedHistory,
       adaptiveTheme: localStorage.getItem('liftlog_adaptive_theme') !== '0',
@@ -611,6 +623,9 @@
       })(),
       realWorkouts: null,
       realLoading: false,
+      customExercises: JSON.parse(localStorage.getItem('liftlog_custom_exercises') || '[]'),
+      showCustomExerciseModal: false,
+      customExerciseError: '',
       showAuthModal: false,
       authModalMode: 'signin',
       authEmail: '',
@@ -648,7 +663,47 @@
     window.addEventListener('unhandledrejection', (event) => {
       if (event.reason && (event.reason.name === 'InvalidStateError' || event.reason.name === 'AbortError')) event.preventDefault();
     });
-    function ic(name, cls = '') { return `<i data-lucide="${name}" class="ic ${cls}"></i>`; }
+    // Phosphor icon paths, embedded inline (no external font/script/stylesheet) so icons render
+    // identically whether this page is opened as a plain file, on GitHub Pages, or as a published
+    // Artifact (whose CSP blocks font/stylesheet fetches to non-Google-Fonts hosts). Each renders
+    // as a self-contained <svg>, so there is no post-render "scan and replace" pass needed.
+    const PHOSPHOR_PATHS = {
+      'arrow-counter-clockwise': 'M224,128a96,96,0,0,1-94.71,96H128A95.38,95.38,0,0,1,62.1,197.8a8,8,0,0,1,11-11.63A80,80,0,1,0,71.43,71.39a3.07,3.07,0,0,1-.26.25L44.59,96H72a8,8,0,0,1,0,16H24a8,8,0,0,1-8-8V56a8,8,0,0,1,16,0V85.8L60.25,60A96,96,0,0,1,224,128Z',
+      'arrow-right': 'M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z',
+      'barbell': 'M248,120h-8V88a16,16,0,0,0-16-16H208V64a16,16,0,0,0-16-16H168a16,16,0,0,0-16,16v56H104V64A16,16,0,0,0,88,48H64A16,16,0,0,0,48,64v8H32A16,16,0,0,0,16,88v32H8a8,8,0,0,0,0,16h8v32a16,16,0,0,0,16,16H48v8a16,16,0,0,0,16,16H88a16,16,0,0,0,16-16V136h48v56a16,16,0,0,0,16,16h24a16,16,0,0,0,16-16v-8h16a16,16,0,0,0,16-16V136h8a8,8,0,0,0,0-16ZM32,168V88H48v80Zm56,24H64V64H88V192Zm104,0H168V64h24V175.82c0,.06,0,.12,0,.18s0,.12,0,.18V192Zm32-24H208V88h16Z',
+      'calendar-blank': 'M208,32H184V24a8,8,0,0,0-16,0v8H88V24a8,8,0,0,0-16,0v8H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32ZM72,48v8a8,8,0,0,0,16,0V48h80v8a8,8,0,0,0,16,0V48h24V80H48V48ZM208,208H48V96H208V208Z',
+      'caret-left': 'M165.66,202.34a8,8,0,0,1-11.32,11.32l-80-80a8,8,0,0,1,0-11.32l80-80a8,8,0,0,1,11.32,11.32L91.31,128Z',
+      'caret-right': 'M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z',
+      'check': 'M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z',
+      'check-circle': 'M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z',
+      'clock': 'M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm64-88a8,8,0,0,1-8,8H128a8,8,0,0,1-8-8V72a8,8,0,0,1,16,0v48h48A8,8,0,0,1,192,128Z',
+      'cloud': 'M160,40A88.09,88.09,0,0,0,81.29,88.67,64,64,0,1,0,72,216h88a88,88,0,0,0,0-176Zm0,160H72a48,48,0,0,1,0-96c1.1,0,2.2,0,3.29.11A88,88,0,0,0,72,128a8,8,0,0,0,16,0,72,72,0,1,1,72,72Z',
+      'dots-three': 'M140,128a12,12,0,1,1-12-12A12,12,0,0,1,140,128Zm56-12a12,12,0,1,0,12,12A12,12,0,0,0,196,116ZM60,116a12,12,0,1,0,12,12A12,12,0,0,0,60,116Z',
+      'download-simple': 'M224,144v64a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V144a8,8,0,0,1,16,0v56H208V144a8,8,0,0,1,16,0Zm-101.66,5.66a8,8,0,0,0,11.32,0l40-40a8,8,0,0,0-11.32-11.32L136,124.69V32a8,8,0,0,0-16,0v92.69L93.66,98.34a8,8,0,0,0-11.32,11.32Z',
+      'export': 'M216,112v96a16,16,0,0,1-16,16H56a16,16,0,0,1-16-16V112A16,16,0,0,1,56,96H80a8,8,0,0,1,0,16H56v96H200V112H176a8,8,0,0,1,0-16h24A16,16,0,0,1,216,112ZM93.66,69.66,120,43.31V136a8,8,0,0,0,16,0V43.31l26.34,26.35a8,8,0,0,0,11.32-11.32l-40-40a8,8,0,0,0-11.32,0l-40,40A8,8,0,0,0,93.66,69.66Z',
+      'floppy-disk': 'M219.31,72,184,36.69A15.86,15.86,0,0,0,172.69,32H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V83.31A15.86,15.86,0,0,0,219.31,72ZM168,208H88V152h80Zm40,0H184V152a16,16,0,0,0-16-16H88a16,16,0,0,0-16,16v56H48V48H172.69L208,83.31ZM160,72a8,8,0,0,1-8,8H96a8,8,0,0,1,0-16h56A8,8,0,0,1,160,72Z',
+      'gear': 'M128,80a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Zm88-29.84q.06-2.16,0-4.32l14.92-18.64a8,8,0,0,0,1.48-7.06,107.21,107.21,0,0,0-10.88-26.25,8,8,0,0,0-6-3.93l-23.72-2.64q-1.48-1.56-3-3L186,40.54a8,8,0,0,0-3.94-6,107.71,107.71,0,0,0-26.25-10.87,8,8,0,0,0-7.06,1.49L130.16,40Q128,40,125.84,40L107.2,25.11a8,8,0,0,0-7.06-1.48A107.6,107.6,0,0,0,73.89,34.51a8,8,0,0,0-3.93,6L67.32,64.27q-1.56,1.49-3,3L40.54,70a8,8,0,0,0-6,3.94,107.71,107.71,0,0,0-10.87,26.25,8,8,0,0,0,1.49,7.06L40,125.84Q40,128,40,130.16L25.11,148.8a8,8,0,0,0-1.48,7.06,107.21,107.21,0,0,0,10.88,26.25,8,8,0,0,0,6,3.93l23.72,2.64q1.49,1.56,3,3L70,215.46a8,8,0,0,0,3.94,6,107.71,107.71,0,0,0,26.25,10.87,8,8,0,0,0,7.06-1.49L125.84,216q2.16.06,4.32,0l18.64,14.92a8,8,0,0,0,7.06,1.48,107.21,107.21,0,0,0,26.25-10.88,8,8,0,0,0,3.93-6l2.64-23.72q1.56-1.48,3-3L215.46,186a8,8,0,0,0,6-3.94,107.71,107.71,0,0,0,10.87-26.25,8,8,0,0,0-1.49-7.06Zm-16.1-6.5a73.93,73.93,0,0,1,0,8.68,8,8,0,0,0,1.74,5.48l14.19,17.73a91.57,91.57,0,0,1-6.23,15L187,173.11a8,8,0,0,0-5.1,2.64,74.11,74.11,0,0,1-6.14,6.14,8,8,0,0,0-2.64,5.1l-2.51,22.58a91.32,91.32,0,0,1-15,6.23l-17.74-14.19a8,8,0,0,0-5-1.75h-.48a73.93,73.93,0,0,1-8.68,0,8,8,0,0,0-5.48,1.74L100.45,215.8a91.57,91.57,0,0,1-15-6.23L82.89,187a8,8,0,0,0-2.64-5.1,74.11,74.11,0,0,1-6.14-6.14,8,8,0,0,0-5.1-2.64L46.43,170.6a91.32,91.32,0,0,1-6.23-15l14.19-17.74a8,8,0,0,0,1.74-5.48,73.93,73.93,0,0,1,0-8.68,8,8,0,0,0-1.74-5.48L40.2,100.45a91.57,91.57,0,0,1,6.23-15L69,82.89a8,8,0,0,0,5.1-2.64,74.11,74.11,0,0,1,6.14-6.14A8,8,0,0,0,82.89,69L85.4,46.43a91.32,91.32,0,0,1,15-6.23l17.74,14.19a8,8,0,0,0,5.48,1.74,73.93,73.93,0,0,1,8.68,0,8,8,0,0,0,5.48-1.74L155.55,40.2a91.57,91.57,0,0,1,15,6.23L173.11,69a8,8,0,0,0,2.64,5.1,74.11,74.11,0,0,1,6.14,6.14,8,8,0,0,0,5.1,2.64l22.58,2.51a91.32,91.32,0,0,1,6.23,15l-14.19,17.74A8,8,0,0,0,199.87,123.66Z',
+      'house': 'M219.31,108.68l-80-80a16,16,0,0,0-22.62,0l-80,80A15.87,15.87,0,0,0,32,120v96a8,8,0,0,0,8,8h64a8,8,0,0,0,8-8V160h32v56a8,8,0,0,0,8,8h64a8,8,0,0,0,8-8V120A15.87,15.87,0,0,0,219.31,108.68ZM208,208H160V152a8,8,0,0,0-8-8H104a8,8,0,0,0-8,8v56H48V120l80-80,80,80Z',
+      'image': 'M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm0,16V158.75l-26.07-26.06a16,16,0,0,0-22.63,0l-20,20-44-44a16,16,0,0,0-22.62,0L40,149.37V56ZM40,172l52-52,80,80H40Zm176,28H194.63l-36-36,20-20L216,181.38V200ZM144,100a12,12,0,1,1,12,12A12,12,0,0,1,144,100Z',
+      'lightning': 'M215.79,118.17a8,8,0,0,0-5-5.66L153.18,90.9l14.66-73.33a8,8,0,0,0-13.69-7l-112,120a8,8,0,0,0,3,13l57.63,21.61L88.16,238.43a8,8,0,0,0,13.69,7l112-120A8,8,0,0,0,215.79,118.17ZM109.37,214l10.47-52.38a8,8,0,0,0-5-9.06L62,132.71l84.62-90.66L136.16,94.43a8,8,0,0,0,5,9.06l52.8,19.8Z',
+      'minus': 'M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z',
+      'pencil-simple': 'M227.31,73.37,182.63,28.68a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H92.69A15.86,15.86,0,0,0,104,219.31L227.31,96a16,16,0,0,0,0-22.63ZM92.69,208H48V163.31l88-88L180.69,120ZM192,108.68,147.31,64l24-24L216,84.68Z',
+      'play': 'M232.4,114.49,88.32,26.35a16,16,0,0,0-16.2-.3A15.86,15.86,0,0,0,64,39.87V216.13A15.94,15.94,0,0,0,80,232a16.07,16.07,0,0,0,8.36-2.35L232.4,141.51a15.81,15.81,0,0,0,0-27ZM80,215.94V40l143.83,88Z',
+      'plus': 'M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z',
+      'pulse': 'M240,128a8,8,0,0,1-8,8H204.94l-37.78,75.58A8,8,0,0,1,160,216h-.4a8,8,0,0,1-7.08-5.14L95.35,60.76,63.28,131.31A8,8,0,0,1,56,136H24a8,8,0,0,1,0-16H50.85L88.72,36.69a8,8,0,0,1,14.76.46l57.51,151,31.85-63.71A8,8,0,0,1,200,120h32A8,8,0,0,1,240,128Z',
+      'repeat': 'M24,128A72.08,72.08,0,0,1,96,56H204.69L194.34,45.66a8,8,0,0,1,11.32-11.32l24,24a8,8,0,0,1,0,11.32l-24,24a8,8,0,0,1-11.32-11.32L204.69,72H96a56.06,56.06,0,0,0-56,56,8,8,0,0,1-16,0Zm200-8a8,8,0,0,0-8,8,56.06,56.06,0,0,1-56,56H51.31l10.35-10.34a8,8,0,0,0-11.32-11.32l-24,24a8,8,0,0,0,0,11.32l24,24a8,8,0,0,0,11.32-11.32L51.31,200H160a72.08,72.08,0,0,0,72-72A8,8,0,0,0,224,120Z',
+      'sparkle': 'M197.58,129.06,146,110l-19-51.62a15.92,15.92,0,0,0-29.88,0L78,110l-51.62,19a15.92,15.92,0,0,0,0,29.88L78,178l19,51.62a15.92,15.92,0,0,0,29.88,0L146,178l51.62-19a15.92,15.92,0,0,0,0-29.88ZM137,164.22a8,8,0,0,0-4.74,4.74L112,223.85,91.78,169A8,8,0,0,0,87,164.22L32.15,144,87,123.78A8,8,0,0,0,91.78,119L112,64.15,132.22,119a8,8,0,0,0,4.74,4.74L191.85,144ZM144,40a8,8,0,0,1,8-8h16V16a8,8,0,0,1,16,0V32h16a8,8,0,0,1,0,16H184V64a8,8,0,0,1-16,0V48H152A8,8,0,0,1,144,40ZM248,88a8,8,0,0,1-8,8h-8v8a8,8,0,0,1-16,0V96h-8a8,8,0,0,1,0-16h8V72a8,8,0,0,1,16,0v8h8A8,8,0,0,1,248,88Z',
+      'timer': 'M128,40a96,96,0,1,0,96,96A96.11,96.11,0,0,0,128,40Zm0,176a80,80,0,1,1,80-80A80.09,80.09,0,0,1,128,216ZM173.66,90.34a8,8,0,0,1,0,11.32l-40,40a8,8,0,0,1-11.32-11.32l40-40A8,8,0,0,1,173.66,90.34ZM96,16a8,8,0,0,1,8-8h48a8,8,0,0,1,0,16H104A8,8,0,0,1,96,16Z',
+      'trash': 'M216,48H176V40a24,24,0,0,0-24-24H104A24,24,0,0,0,80,40v8H40a8,8,0,0,0,0,16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM96,40a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96Zm96,168H64V64H192ZM112,104v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm48,0v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Z',
+      'trend-up': 'M240,56v64a8,8,0,0,1-16,0V75.31l-82.34,82.35a8,8,0,0,1-11.32,0L96,123.31,29.66,189.66a8,8,0,0,1-11.32-11.32l72-72a8,8,0,0,1,11.32,0L136,140.69,212.69,64H168a8,8,0,0,1,0-16h64A8,8,0,0,1,240,56Z',
+      'warning-circle': 'M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm-8-80V80a8,8,0,0,1,16,0v56a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,172Z',
+      'x': 'M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z',
+    };
+    function ic(name, cls = '') {
+      const d = PHOSPHOR_PATHS[name];
+      if (!d) return '';
+      return `<svg viewBox="0 0 256 256" class="ic ${cls}" aria-hidden="true"><path d="${d}" fill="currentColor"/></svg>`;
+    }
 
     // --- Real Supabase connectivity -------------------------------------------------
     // Direct fetch() calls against the Supabase REST/Auth endpoints (no supabase-js, to keep
@@ -775,6 +830,43 @@
         total_volume: volume,
       });
     }
+    // Export format is intentionally versioned (schemaVersion) — see DATA_MODEL.md for the full
+    // contract and the plan for evolving it (e.g. once per-set detail syncs to Supabase too).
+    const EXPORT_SCHEMA_VERSION = 1;
+    function downloadTextFile(filename, content, mime) {
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    }
+    function csvEscape(value) { const s = String(value ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }
+    function exportData() {
+      const isReal = state.mode === 'real' && !!state.session;
+      const sourceRows = isReal ? (state.realWorkouts || []) : state.history;
+      if (!sourceRows.length) throw new Error('Nothing to export yet');
+      const workouts = isReal
+        ? sourceRows.map(r => ({ id: r.id, name: r.name, startedAt: r.started_at, durationSeconds: r.duration_seconds, totalVolumeKg: Number(r.total_volume) || 0 }))
+        : sourceRows.map(r => ({ id: r.id, name: r.name, loggedLabel: r.meta, totalVolumeLabel: r.metric, pr: r.pr || '' }));
+      const payload = {
+        schemaVersion: EXPORT_SCHEMA_VERSION,
+        exportedAt: new Date().toISOString(),
+        source: isReal ? 'supabase' : 'demo-local',
+        account: isReal ? state.session.email : null,
+        workouts,
+      };
+      const stamp = new Date().toISOString().slice(0, 10);
+      downloadTextFile(`liftlog-export-${stamp}.json`, JSON.stringify(payload, null, 2), 'application/json');
+      const csvRows = [['name', 'when', 'volume', 'notes'].join(',')];
+      workouts.forEach(w => {
+        csvRows.push([csvEscape(w.name), csvEscape(w.startedAt || w.loggedLabel), csvEscape(w.totalVolumeKg ?? w.totalVolumeLabel), csvEscape(w.pr || '')].join(','));
+      });
+      downloadTextFile(`liftlog-export-${stamp}.csv`, csvRows.join('\n'), 'text/csv');
+    }
     function computeRealStats(rows) {
       const now = Date.now();
       const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
@@ -821,9 +913,9 @@
     function elapsed() { const total = Math.max(0, Math.floor((Date.now() - (state.workout?.started || Date.now())) / 1000)); return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`; }
     function timer(seconds) { return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`; }
     function card(content, cls = '') { return `<div class="card ${cls} reveal">${content}</div>`; }
-    function section(title, action = '', attrs = '') { return `<div class="section-head"><h3>${title}</h3>${action ? `<button class="link" ${attrs}>${action} ${ic('chevron-right', 'ic-sm')}</button>` : ''}</div>`; }
+    function section(title, action = '', attrs = '') { return `<div class="section-head"><h3>${title}</h3>${action ? `<button class="link" ${attrs}>${action} ${ic('caret-right', 'ic-sm')}</button>` : ''}</div>`; }
     function nav() {
-      const tabs = [['today', 'home', 'Today'], ['routines', 'repeat', 'Routines'], ['progress', 'trending-up', 'Progress'], ['settings', 'settings', 'Settings']];
+      const tabs = [['today', 'house', 'Today'], ['routines', 'repeat', 'Routines'], ['progress', 'trend-up', 'Progress'], ['settings', 'gear', 'Settings']];
       const index = tabs.findIndex(([id]) => id === state.tab);
       return `<nav class="bottom-nav"><span class="nav-indicator" style="transform:translateX(${index * 100}%)"></span>${tabs.map(([id, iconName, label]) => `<button class="nav-item ${state.tab === id ? 'active' : ''}" data-tab="${id}">${ic(iconName)}${label}</button>`).join('')}</nav>`;
     }
@@ -838,8 +930,11 @@
       return card(`<div class="icon-box mint">${ic('cloud')}</div><div class="mode-copy"><strong>Synced with Supabase</strong><span>Signed in as ${state.session.email}. Workouts you finish are saved to your account.</span></div><button class="mode-action" data-action="sign-out">Sign out</button>`, 'mode-card');
     }
     function progressData() { return progressRanges[state.progressRange] || progressRanges['12 weeks']; }
+    // The built-in catalog plus anything the user has added themselves (localStorage-backed, this
+    // browser only for now — see DATA_MODEL.md for the sync plan).
+    function allExercises() { return exercises.concat(state.customExercises); }
     function exerciseProfile(id = state.selectedExercise) {
-      const exercise = exercises.find(ex => ex.id === id) || exercises[0];
+      const exercise = allExercises().find(ex => ex.id === id) || exercises[0];
       if (id === 'bench') return { exercise, latest: '85 kg × 6', best: '85 kg', change: '+6.2%', strength: [58, 60, 61, 64, 64, 68, 71, 70, 74, 78, 80, 84], volume: [38, 43, 49, 46, 55, 58, 61, 68, 65, 74, 78, 88], intensity: [63, 67, 66, 71, 69, 74, 76, 73, 78, 81, 82, 86], insight: 'You added 5 kg to your top set while keeping reps in the same range.' };
       const seed = exercise.name.length + exercise.id.length;
       const base = 46 + (seed % 13);
@@ -874,9 +969,9 @@
       if (state.onboardingStep > 0) {
         const feature = tourFeatures[state.onboardingStep - 1];
         const finalStep = state.onboardingStep === tourFeatures.length;
-        return `<section class="onboarding onboarding-feature">${meshBg()}<div class="onboarding-tour-head"><div class="onboarding-mark small">L</div><div class="eyebrow">LIFTLOG · QUICK TOUR · STEP ${state.onboardingStep}/${tourFeatures.length}</div></div><div class="onboarding-tour-body">${onboardingDots(state.onboardingStep)}<div class="feature-card reveal"><div class="feature-top"><span class="feature-number">${feature.number}</span><span class="feature-glyph">${ic(feature.glyph, 'ic-lg')}</span></div><div><h2>${feature.title}</h2><p>${feature.copy}</p></div></div></div><div class="onboarding-panel"><p class="name-hint" style="margin:0">Built for your next session, ${displayName()}.</p><button class="primary" data-action="${finalStep ? 'finish-tour' : 'next-onboarding'}">${finalStep ? 'Start exploring' : 'Next'} ${ic('arrow-right', 'ic-sm')}</button><button class="skip-onboarding" data-action="skip-onboarding">Skip tour</button></div></section>`;
+        return `<section class="onboarding onboarding-feature">${meshBg()}<div class="onboarding-tour-head"><div class="onboarding-mark small"><img src="assets/logo.svg" alt="LiftLog"></div><div class="eyebrow">LIFTLOG · QUICK TOUR · STEP ${state.onboardingStep}/${tourFeatures.length}</div></div><div class="onboarding-tour-body">${onboardingDots(state.onboardingStep)}<div class="feature-card reveal"><div class="feature-top"><span class="feature-number">${feature.number}</span><span class="feature-glyph">${ic(feature.glyph, 'ic-lg')}</span></div><div><h2>${feature.title}</h2><p>${feature.copy}</p></div></div></div><div class="onboarding-panel"><p class="name-hint" style="margin:0">Built for your next session, ${displayName()}.</p><button class="primary" data-action="${finalStep ? 'finish-tour' : 'next-onboarding'}">${finalStep ? 'Start exploring' : 'Next'} ${ic('arrow-right', 'ic-sm')}</button><button class="skip-onboarding" data-action="skip-onboarding">Skip tour</button></div></section>`;
       }
-      return `<section class="onboarding">${meshBg()}<div><div class="onboarding-mark">L</div><div class="eyebrow" style="margin-top:28px">LIFTLOG · PERSONAL LOGBOOK</div>${onboardingDots(0)}<h1>Train with a little more <em>signal.</em></h1><p class="onboarding-copy">A calm, fast place to log the work, compare the last session, and see the trend you are building.</p></div><div class="onboarding-panel"><label class="field-label" for="name-input">What should we call you?</label><input id="name-input" autocomplete="off" placeholder="Your first name" value="${state.userName}"><p class="name-hint">This stays on your device in the preview. It will become your profile when accounts are added.</p><button class="primary" data-action="finish-onboarding">Continue ${ic('arrow-right', 'ic-sm')}</button><button class="skip-onboarding" data-action="skip-onboarding">Use Athlete for now</button></div></section>`;
+      return `<section class="onboarding">${meshBg()}<div><div class="onboarding-mark"><img src="assets/logo.svg" alt="LiftLog"></div><div class="eyebrow" style="margin-top:28px">LIFTLOG · PERSONAL LOGBOOK</div>${onboardingDots(0)}<h1>Train with a little more <em>signal.</em></h1><p class="onboarding-copy">A calm, fast place to log the work, compare the last session, and see the trend you are building.</p></div><div class="onboarding-panel"><label class="field-label" for="name-input">What should we call you?</label><input id="name-input" autocomplete="off" placeholder="Your first name" value="${state.userName}"><p class="name-hint">This stays on your device in the preview. It will become your profile when accounts are added.</p><button class="primary" data-action="finish-onboarding">Continue ${ic('arrow-right', 'ic-sm')}</button><button class="skip-onboarding" data-action="skip-onboarding">Use Athlete for now</button></div></section>`;
     }
 
     function todayView() {
@@ -896,13 +991,13 @@
         ? (state.realLoading
           ? `<p class="subtle" style="padding:16px 0">Loading your sessions…</p>`
           : realRows.length
-            ? realRows.slice(0, 4).map(row => history(row.name, `${formatRelativeDate(row.started_at)} · ${formatMinutes(row.duration_seconds)}`, `${Math.round(row.total_volume || 0).toLocaleString()} kg`, '')).join('')
+            ? realRows.slice(0, 4).map(row => history(realRowToHistoryItem(row), 'delete-real-workout')).join('')
             : emptyState('dumbbell', 'No sessions yet', 'Finish a workout and it will show up here, synced to your account.'))
         : (state.history.length
-          ? state.history.slice(0, 4).map(item => history(item.name, item.meta, item.metric, item.pr)).join('')
+          ? state.history.slice(0, 4).map(item => history(item, 'delete-demo-workout')).join('')
           : emptyState('dumbbell', 'No sessions yet', 'Finish a workout and it will show up here.'));
       return `<section class="screen"><div class="glow"></div><div class="scroll">
-        <div class="topline"><div class="topline-copy"><div class="eyebrow">${ic('calendar', 'ic-sm')} ${new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' }).format(new Date()).toUpperCase()}</div><h1>Good morning, ${displayName()},<br>ready to lift?</h1></div>${cloudPill()}</div>
+        <div class="topline"><div class="topline-copy"><div class="eyebrow">${ic('calendar-blank', 'ic-sm')} ${new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' }).format(new Date()).toUpperCase()}</div><h1>Good morning, ${displayName()},<br>ready to lift?</h1></div>${cloudPill()}</div>
         ${card(`<div class="focus-copy"><div class="eyebrow">TODAY'S FOCUS</div><h2>Upper strength</h2><div class="focus-meta">7 exercises · about 52 min</div><button class="primary" data-action="start-routine" data-routine="upper">${ic('play', 'ic-sm')} Start Upper A</button></div><div class="week-ring"><svg viewBox="0 0 88 88"><circle class="track" cx="44" cy="44" r="38"></circle><circle class="fill" cx="44" cy="44" r="38" stroke-dasharray="${ringCirc}" stroke-dashoffset="${ringOffset}"></circle></svg><span>${ringDone}<small>of ${weeklyGoal}</small></span></div>`, 'focus-card')}
         ${modeCard()}
         ${section('Quick start', 'View all', 'data-tab="routines"')}
@@ -914,33 +1009,41 @@
       </div>${nav()}</section>`;
     }
     function stat(label, value, caption) { return `<div class="card stat"><span class="stat-label">${label}</span><strong class="stat-value">${statValue(value)}</strong><span class="stat-caption">${caption}</span></div>`; }
-    function history(name, meta, metric, pr) { return `<div class="history-row"><div class="history-icon">${ic('dumbbell', 'ic-sm')}</div><div class="history-copy"><strong>${name}</strong><span>${meta}</span></div><div class="history-metric"><strong>${metric}</strong><span class="pr">${pr}</span></div></div>`; }
+    // item: {id, name, meta, metric, pr}. deleteAction, when passed, renders a trash button
+    // wired to that data-action with data-workout-id="item.id" — lets you delete a workout you
+    // logged just to try the app out (both local demo entries and real Supabase rows).
+    function history(item, deleteAction) {
+      return `<div class="history-row"><div class="history-icon">${ic('barbell', 'ic-sm')}</div><div class="history-copy"><strong>${item.name}</strong><span>${item.meta}</span></div><div class="history-metric"><strong>${item.metric}</strong><span class="pr">${item.pr || ''}</span></div>${deleteAction ? `<button class="history-delete" data-action="${deleteAction}" data-workout-id="${item.id}" aria-label="Delete ${item.name}">${ic('trash', 'ic-sm')}</button>` : ''}</div>`;
+    }
+    function realRowToHistoryItem(row) {
+      return { id: row.id, name: row.name, meta: `${formatRelativeDate(row.started_at)} · ${formatMinutes(row.duration_seconds)}`, metric: `${Math.round(row.total_volume || 0).toLocaleString()} kg`, pr: '' };
+    }
     function historyView() {
-      return `<section class="screen"><div class="scroll"><div class="library-header"><button class="back-btn" data-action="close-history" aria-label="Back">${ic('chevron-left')}</button><div><h2>Session history</h2><p class="library-count">${state.history.length} logged sessions</p></div></div>
-        ${state.history.length ? card(state.history.map(item => history(item.name, item.meta, item.metric, item.pr)).join('')) : emptyState('dumbbell', 'No sessions yet', 'Finish a workout and it will show up here.')}
+      return `<section class="screen"><div class="scroll"><div class="library-header"><button class="back-btn" data-action="close-history" aria-label="Back">${ic('caret-left')}</button><div><h2>Session history</h2><p class="library-count">${state.history.length} logged sessions</p></div></div>
+        ${state.history.length ? card(state.history.map(item => history(item, 'delete-demo-workout')).join('')) : emptyState('dumbbell', 'No sessions yet', 'Finish a workout and it will show up here.')}
       </div></section>`;
     }
 
     function routinesView() {
       return `<section class="screen"><div class="glow"></div><div class="scroll"><div class="routine-header"><div><h1>Routines</h1><p class="subtle">Your training, organized.</p></div></div>
-        ${card(`<div class="program-top"><div class="program-logo">P/P/L</div><div class="program-copy"><strong>Push / Pull / Legs</strong><span>3 routines · 19 exercises</span></div><span class="chevron">${ic('chevron-right')}</span></div><div class="progress-line"><i style="width:64%"></i></div><p class="subtle" style="margin-top:8px;font-size:11px">64% of this week's planned work</p>`, 'program-card')}
+        ${card(`<div class="program-top"><div class="program-logo">P/P/L</div><div class="program-copy"><strong>Push / Pull / Legs</strong><span>3 routines · 19 exercises</span></div><span class="chevron">${ic('caret-right')}</span></div><div class="progress-line"><i style="width:64%"></i></div><p class="subtle" style="margin-top:8px;font-size:11px">64% of this week's planned work</p>`, 'program-card')}
         ${section('Your routines', 'Edit', 'data-action="toast" data-message="Routine editing is coming in a future release"')}${starterRoutines.map(r => `<div class="card routine-card"><i class="routine-accent" style="background:${r.color}"></i><div class="routine-copy"><strong>${r.name}</strong><span>${r.description}</span><span>${r.count} exercises · ${r.last}</span></div><button class="start-small" data-action="start-routine" data-routine="${r.id}" aria-label="Start ${r.name}">${ic('play', 'ic-sm')}</button></div>`).join('')}
         <button class="outline" data-action="toast" data-message="Routine builder is next in the Android slice">${ic('plus', 'ic-sm')} Create a routine</button>
-        ${card(`<div class="program-top"><img class="exercise-art" src="${iconFor('Chest')}" alt=""><div class="program-copy"><strong>Exercise library</strong><span>${exercises.length} movements · 7 muscle groups</span></div><button class="mode-action" data-action="library">Browse ${ic('arrow-right', 'ic-sm')}</button></div>`, 'program-card')}
+        ${card(`<div class="program-top"><img class="exercise-art" src="${iconFor('Chest')}" alt=""><div class="program-copy"><strong>Exercise library</strong><span>${allExercises().length} movements · 7 muscle groups</span></div><button class="mode-action" data-action="library">Browse ${ic('arrow-right', 'ic-sm')}</button></div>`, 'program-card')}
       </div>${nav()}</section>`;
     }
 
     function filteredExercises() {
       const query = state.libraryQuery.trim().toLowerCase();
-      return exercises.filter(ex => (state.libraryCategory === 'All' || ex.category === state.libraryCategory) && (!query || `${ex.name} ${ex.muscle} ${ex.equipment}`.toLowerCase().includes(query)));
+      return allExercises().filter(ex => (state.libraryCategory === 'All' || ex.category === state.libraryCategory) && (!query || `${ex.name} ${ex.muscle} ${ex.equipment}`.toLowerCase().includes(query)));
     }
     function libraryItems() {
       const rows = filteredExercises();
-      return rows.length ? rows.map(ex => `<button class="library-item reveal" data-action="exercise-detail" data-exercise-id="${ex.id}"><img class="exercise-art" src="${iconFor(ex.category)}" alt=""><span class="library-copy"><strong>${ex.name}</strong><span>${ex.muscle} · ${ex.equipment} · ${ex.tracking}</span></span><span class="chevron">${ic('chevron-right')}</span></button>`).join('') : `<p class="subtle" style="padding:20px 0">No movements match that search.</p>`;
+      return rows.length ? rows.map(ex => `<button class="library-item reveal" data-action="exercise-detail" data-exercise-id="${ex.id}"><img class="exercise-art" src="${iconFor(ex.category)}" alt=""><span class="library-copy"><strong>${ex.name}${ex.custom ? ' <i class="custom-tag">Custom</i>' : ''}</strong><span>${ex.muscle} · ${ex.equipment} · ${ex.tracking}</span></span>${ex.custom ? `<button class="more-btn" data-action="delete-custom-exercise" data-exercise-id="${ex.id}" aria-label="Delete ${ex.name}">${ic('trash', 'ic-sm')}</button>` : `<span class="chevron">${ic('caret-right')}</span>`}</button>`).join('') : `<p class="subtle" style="padding:20px 0">No movements match that search.</p>`;
     }
     function libraryView() {
       const categories = ['All', 'Chest', 'Back', 'Shoulders', 'Arms', 'Legs', 'Core', 'Cardio'];
-      return `<section class="screen"><div class="scroll"><div class="library-header"><button class="back-btn" data-action="close-library" aria-label="Back">${ic('chevron-left')}</button><div><h2>Exercise library</h2><p class="library-count">${exercises.length} movements · local muscle icons</p></div><span class="tag">READY</span></div><input class="library-search" id="library-search" placeholder="Search exercises, muscle, equipment" value="${state.libraryQuery}"><div class="filter-row" style="margin-top:12px">${categories.map(category => `<button class="filter ${state.libraryCategory === category ? 'active' : ''}" data-action="filter-category" data-category="${category}">${category}</button>`).join('')}</div><div class="library-list">${libraryItems()}</div></div></section>`;
+      return `<section class="screen"><div class="scroll"><div class="library-header"><button class="back-btn" data-action="close-library" aria-label="Back">${ic('caret-left')}</button><div><h2>Exercise library</h2><p class="library-count">${allExercises().length} movements · local muscle icons</p></div><span class="tag">READY</span></div><input class="library-search" id="library-search" placeholder="Search exercises, muscle, equipment" value="${state.libraryQuery}"><div class="filter-row" style="margin-top:12px">${categories.map(category => `<button class="filter ${state.libraryCategory === category ? 'active' : ''}" data-action="filter-category" data-category="${category}">${category}</button>`).join('')}</div><button class="outline" style="margin-top:12px" data-action="open-custom-exercise-modal">${ic('plus', 'ic-sm')} Add custom exercise</button><div class="library-list">${libraryItems()}</div></div></section>`;
     }
 
     function settingToggleRow(setting, title, desc, checked) {
@@ -958,17 +1061,21 @@
         ${card(settingToggleRow('adaptive-theme', 'Adaptive daily theme', 'Shifts the background mood with the time of day — sunny mornings, clear days, moody evenings, starry nights. Purely decorative, never changes text or button colors.', state.adaptiveTheme))}
         ${section('Data')}
         ${card(`<div class="settings-row"><div class="settings-copy"><strong>Mode</strong><span>${state.mode === 'demo' ? 'Demo preview data' : (state.session ? `Real · synced as ${state.session.email}` : 'Real mode')}</span></div><button class="mode-action" data-action="toggle-mode">${state.mode === 'demo' ? 'Go real' : 'Go demo'}</button></div>`)}
-        ${card(`<button class="outline" data-action="reset-history">${ic('rotate-ccw', 'ic-sm')} Clear demo history</button>`)}
+        ${card(`<button class="outline" data-action="export-data">${ic('export', 'ic-sm')} Export your data (JSON + CSV)</button>`)}
+        ${card(`<button class="outline" data-action="reset-history">${ic('arrow-counter-clockwise', 'ic-sm')} Clear demo history</button>`)}
         ${section('About')}
         ${card(`<button class="outline" data-action="replay-onboarding">${ic('play', 'ic-sm')} Replay onboarding</button>`)}
-        ${card(`<div class="settings-row settings-foot"><div class="settings-copy"><strong>LiftLog</strong><span>Interactive preview build · ${exercises.length} exercises</span></div></div>`)}
+        ${card(`<a class="settings-row" href="privacy.html" style="text-decoration:none;color:inherit"><div class="settings-copy"><strong>Privacy Policy</strong></div>${ic('caret-right')}</a>`)}
+        ${card(`<a class="settings-row" href="terms.html" style="text-decoration:none;color:inherit"><div class="settings-copy"><strong>Terms of Use</strong></div>${ic('caret-right')}</a>`)}
+        ${card(`<a class="settings-row" href="refund.html" style="text-decoration:none;color:inherit"><div class="settings-copy"><strong>Refund Policy</strong></div>${ic('caret-right')}</a>`)}
+        ${card(`<div class="settings-row settings-foot"><div class="settings-copy"><strong>LiftLog</strong><span>Interactive preview build · ${allExercises().length} exercises${state.customExercises.length ? ` (${state.customExercises.length} custom)` : ''}</span></div></div>`)}
       </div>${nav()}</section>`;
     }
 
     const spotlightExercises = ['bench', 'back-squat', 'deadlift', 'pulldown', 'ohp', 'barbell-row'];
     function exerciseProgressRow(id) {
       const p = exerciseProfile(id);
-      return `<button class="exercise-progress-row" data-action="exercise-detail" data-exercise-id="${id}"><img class="exercise-art" src="${iconFor(p.exercise.category)}" alt=""><span class="exercise-progress-copy"><strong>${p.exercise.name}</strong><span>${p.exercise.category} · ${p.latest}</span></span><span class="exercise-progress-change">${statValue(p.change)}</span>${ic('chevron-right', 'ic-sm')}</button>`;
+      return `<button class="exercise-progress-row" data-action="exercise-detail" data-exercise-id="${id}"><img class="exercise-art" src="${iconFor(p.exercise.category)}" alt=""><span class="exercise-progress-copy"><strong>${p.exercise.name}</strong><span>${p.exercise.category} · ${p.latest}</span></span><span class="exercise-progress-change">${statValue(p.change)}</span>${ic('caret-right', 'ic-sm')}</button>`;
     }
     function barLabel(range, index) {
       if (range === '4 weeks') return `Session ${index + 1}`;
@@ -992,7 +1099,8 @@
       return `<section class="screen"><div class="glow"></div><div class="scroll">${header}
         <div class="stat-grid progress-summary">${stat('SESSIONS LOGGED', String(rows.length), 'all time')}${stat('TOTAL VOLUME', `${Math.round(totalVolume).toLocaleString()} kg`, 'all time')}</div>
         ${section('Your sessions')}
-        ${card(rows.map(row => history(row.name, `${formatRelativeDate(row.started_at)} · ${formatMinutes(row.duration_seconds)}`, `${Math.round(row.total_volume || 0).toLocaleString()} kg`, '')).join(''))}
+        ${card(rows.map(row => history(realRowToHistoryItem(row), 'delete-real-workout')).join(''))}
+        <button class="outline" style="margin-top:12px" data-action="export-data">${ic('export', 'ic-sm')} Export your data</button>
         <p class="chart-note" style="margin-top:12px">Charts by muscle group and per-exercise trends arrive once there's more history to work with — per-set detail sync is a follow-up.</p>
       </div>${nav()}</section>`;
     }
@@ -1007,14 +1115,14 @@
       return `<section class="screen"><div class="glow"></div><div class="scroll"><div class="topline"><div class="topline-copy"><h1>Progress</h1><p class="subtle" style="margin-top:7px">Your training, in context.</p></div></div>
         <div class="progress-toolbar"><span class="eyebrow">TIME WINDOW</span><div class="range-switcher" role="group" aria-label="Progress time window">${rangeOptions.map(option => `<button class="range-option ${state.progressRange === option ? 'active' : ''}" data-action="progress-range" data-range="${option}">${option.toUpperCase()}</button>`).join('')}</div></div>
         <div class="stat-grid progress-summary">${stat('PRS IN RANGE', range.prs, range.start)}${stat('TRAINING DAYS', range.days, range.start)}</div>
-        ${card(`<div class="chart-head"><div><h3>Volume trend</h3><div class="chart-value">${statValue(range.volume)} <small>kg</small></div><div class="positive">${ic('trending-up', 'ic-sm')} ${range.delta} vs. previous period</div></div><span class="tag">${range.start.toUpperCase()}</span></div><div class="bars">${range.bars.map((height, index) => `<i class="bar" style="height:${height}%" data-action="bar-detail" data-index="${index}" role="button" aria-label="${barLabel(state.progressRange, index)} detail"></i>`).join('')}</div><div class="chart-labels"><span>${range.start}</span><span>Today</span></div><p class="chart-note">Tap a bar to see what that stretch looked like in brief.</p>`, 'chart-card')}
+        ${card(`<div class="chart-head"><div><h3>Volume trend</h3><div class="chart-value">${statValue(range.volume)} <small>kg</small></div><div class="positive">${ic('trend-up', 'ic-sm')} ${range.delta} vs. previous period</div></div><span class="tag">${range.start.toUpperCase()}</span></div><div class="bars">${range.bars.map((height, index) => `<i class="bar" style="height:${height}%" data-action="bar-detail" data-index="${index}" role="button" aria-label="${barLabel(state.progressRange, index)} detail"></i>`).join('')}</div><div class="chart-labels"><span>${range.start}</span><span>Today</span></div><p class="chart-note">Tap a bar to see what that stretch looked like in brief.</p>`, 'chart-card')}
         ${card(`<div class="chart-head"><h3 style="flex:1">Working sets by muscle</h3><span class="subtle" style="font-size:11px">${state.progressRange === 'All time' ? 'lifetime' : 'in range'}</span></div>${range.muscles.map(([name, sets, color]) => `<div class="muscle-row"><label>${name}</label><div class="progress-line"><i style="width:${Math.max(10, Math.round(sets / maxMuscle * 100))}%;background:${color}"></i></div><b>${sets}</b></div>`).join('')}`, 'muscle-card')}
         ${section('Progress by exercise', 'Browse all', 'data-action="library"')}
         ${card(spotlightExercises.map(id => exerciseProgressRow(id)).join(''))}
         ${card(`<div class="spotlight-top"><img class="exercise-art" src="${iconFor(spotlight.exercise.category)}" alt=""><div class="spotlight-copy"><strong>${spotlight.exercise.name}</strong><span>Strength trend · ${spotlight.exercise.equipment}</span></div><span class="spotlight-metric">${statValue(spotlight.change)}</span></div><svg class="sparkline" viewBox="0 0 360 68" role="img" aria-label="Barbell bench press strength trend"><polyline points="${points}"/><circle cx="348" cy="${points.split(' ').at(-1).split(',')[1]}" r="4"></circle></svg><div class="spotlight-footer"><span>${spotlight.latest} · best set</span><button class="link" data-action="exercise-detail" data-exercise-id="bench">View full graph ${ic('arrow-right', 'ic-sm')}</button></div>`, 'spotlight-card')}
-        ${card(`<div class="plateau-icon">${ic('trending-up', 'ic-sm')}</div><div class="plateau-copy"><strong>Next move: bench press</strong><span>Two clean sessions at 85 kg. Add one rep before adding load, then let the graph confirm the call.</span></div><button class="link" data-action="exercise-detail" data-exercise-id="bench">Open</button>`, 'plateau-card')}
-        ${card(`<div class="review-icon">${ic('sparkles')}</div><div class="review-copy"><strong>${rangeLabel}</strong><span>${range.workouts} · ${range.sets} · ${range.prs} PRs · ${range.delta} volume</span></div><button class="link" data-action="add-sample">${ic('plus', 'ic-sm')} Add sample</button>`, 'review-card')}
-        ${card(`<div class="chart-head"><div><h3>What changed</h3><p class="subtle" style="margin-top:5px">A sample timeline you can replace with synced workouts when Real mode is connected.</p></div></div><div class="timeline">${range.timeline.map(([label, title, detail]) => `<div class="timeline-row"><span>${label}</span><strong>${title}</strong><small>${detail}</small></div>`).join('')}</div><button class="outline" style="margin-top:16px" data-action="toast" data-message="Export will create a CSV from your real sessions">${ic('download', 'ic-sm')} Export progress</button>`, 'timeline-card')}
+        ${card(`<div class="plateau-icon">${ic('trend-up', 'ic-sm')}</div><div class="plateau-copy"><strong>Next move: bench press</strong><span>Two clean sessions at 85 kg. Add one rep before adding load, then let the graph confirm the call.</span></div><button class="link" data-action="exercise-detail" data-exercise-id="bench">Open</button>`, 'plateau-card')}
+        ${card(`<div class="review-icon">${ic('sparkle')}</div><div class="review-copy"><strong>${rangeLabel}</strong><span>${range.workouts} · ${range.sets} · ${range.prs} PRs · ${range.delta} volume</span></div><button class="link" data-action="add-sample">${ic('plus', 'ic-sm')} Add sample</button>`, 'review-card')}
+        ${card(`<div class="chart-head"><div><h3>What changed</h3><p class="subtle" style="margin-top:5px">A sample timeline you can replace with synced workouts when Real mode is connected.</p></div></div><div class="timeline">${range.timeline.map(([label, title, detail]) => `<div class="timeline-row"><span>${label}</span><strong>${title}</strong><small>${detail}</small></div>`).join('')}</div><button class="outline" style="margin-top:16px" data-action="export-data">${ic('export', 'ic-sm')} Export your logged sessions</button>`, 'timeline-card')}
       </div>${nav()}</section>`;
     }
 
@@ -1027,7 +1135,7 @@
       const ranges = ['3M', '1Y', 'All'];
       const labels = state.exerciseRange === '3M' ? ['W1', 'W4', 'W8', 'W12'] : state.exerciseRange === '1Y' ? ['M1', 'M4', 'M8', 'M12'] : ['Start', 'Build', 'Peak', 'Now'];
       const graphLabels = labels.map((label) => `<span>${label}</span>`).join('');
-      return `<section class="screen"><div class="scroll"><div class="exercise-detail-top"><button class="back-btn" data-action="close-exercise-detail" aria-label="Back">${ic('chevron-left')}</button><div><h2>Exercise detail</h2><p>Fake data preview · swap for your logged history later</p></div><span class="tag">${state.exerciseRange}</span></div>
+      return `<section class="screen"><div class="scroll"><div class="exercise-detail-top"><button class="back-btn" data-action="close-exercise-detail" aria-label="Back">${ic('caret-left')}</button><div><h2>Exercise detail</h2><p>Fake data preview · swap for your logged history later</p></div><span class="tag">${state.exerciseRange}</span></div>
         <div class="exercise-hero"><img class="exercise-art" src="${iconFor(profile.exercise.category)}" alt=""><div class="exercise-hero-copy"><h1>${profile.exercise.name}</h1><p>${profile.exercise.muscle} · ${profile.exercise.equipment} · ${profile.exercise.tracking}</p></div></div>
         <div class="metric-grid"><div class="metric-box"><span>Latest</span><strong>${statValue(profile.latest)}</strong></div><div class="metric-box"><span>Best</span><strong>${statValue(profile.best)}</strong></div><div class="metric-box"><span>Change</span><strong style="color:var(--mint)">${statValue(profile.change)}</strong></div></div>
         ${card(`<div class="graph-head"><div><h3>${metricCopy[0]}</h3><p>${metricCopy[1]} · normalized so the direction is easy to read.</p></div><span class="tag">${state.exerciseRange}</span></div><div class="graph-wrap"><svg class="exercise-graph" viewBox="0 0 360 170" role="img" aria-label="${profile.exercise.name} ${state.exerciseMetric.toLowerCase()} graph"><defs><linearGradient id="graphFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#ff5a36" stop-opacity=".28"></stop><stop offset="1" stop-color="#ff5a36" stop-opacity="0"></stop></linearGradient></defs><line class="gridline" x1="24" x2="336" y1="28" y2="28"></line><line class="gridline" x1="24" x2="336" y1="84" y2="84"></line><line class="gridline" x1="24" x2="336" y1="140" y2="140"></line><polygon class="area" points="${graphArea(points)}"></polygon><polyline class="trend" points="${points}"></polyline>${points.split(' ').map(pair => { const [x, y] = pair.split(','); return `<circle class="point" cx="${x}" cy="${y}" r="3.5"></circle>`; }).join('')}<text class="axis-label" x="3" y="32">high</text><text class="axis-label" x="3" y="144">low</text></svg><div class="graph-legend">${graphLabels}</div></div><div class="graph-controls"><div class="metric-switch" role="group" aria-label="Exercise metric">${['Strength', 'Volume', 'Intensity'].map(option => `<button class="metric-option ${state.exerciseMetric === option ? 'active' : ''}" data-action="exercise-metric" data-metric="${option}">${option}</button>`).join('')}</div><div class="range-mini" role="group" aria-label="Exercise graph range">${ranges.map(option => `<button class="${state.exerciseRange === option ? 'active' : ''}" data-action="exercise-range" data-range="${option}">${option}</button>`).join('')}</div></div><div class="graph-insight"><b>${profile.change}</b><span>${profile.insight}</span></div>`, 'graph-card')}
@@ -1041,19 +1149,38 @@
       const total = w.exercises.reduce((n, ex) => n + ex.sets.length, 0);
       const restPct = state.restTotal > 0 ? Math.max(0, Math.min(1, state.rest / state.restTotal)) : 0;
       const restCirc = 2 * Math.PI * 18;
-      return `<section class="workout-screen"><div class="workout-top"><button class="back-btn" data-action="close-workout" aria-label="Close workout">${ic('chevron-left')}</button><div class="workout-title"><strong>${w.name}</strong><span>${elapsed()} elapsed</span></div><button class="finish-btn" data-action="finish-workout">Finish</button></div><div class="workout-scroll">
+      return `<section class="workout-screen"><div class="workout-top"><button class="back-btn" data-action="close-workout" aria-label="Close workout">${ic('caret-left')}</button><div class="workout-title"><strong>${w.name}</strong><span>${elapsed()} elapsed</span></div><button class="finish-btn" data-action="finish-workout">Finish</button></div><div class="workout-scroll">
         <div class="workout-intro"><div><div class="eyebrow">ACTIVE WORKOUT</div><p>Log the work. Keep the signal.</p></div><span class="tag">${completed}/${total} SETS</span></div>
         ${state.rest > 0 ? `<div class="rest-timer"><div class="timer-ring"><svg viewBox="0 0 44 44"><circle class="track" cx="22" cy="22" r="18"></circle><circle class="fill" cx="22" cy="22" r="18" stroke-dasharray="${restCirc.toFixed(1)}" stroke-dashoffset="${(restCirc * (1 - restPct)).toFixed(1)}"></circle></svg>${ic('timer', 'ic-sm')}</div><div class="timer-copy"><span>REST TIMER</span><strong>${timer(state.rest)}</strong></div><button class="timer-action" data-action="rest-minus" aria-label="Subtract 15 seconds">${ic('minus', 'ic-sm')}</button><button class="timer-action" data-action="rest-plus" aria-label="Add 15 seconds">${ic('plus', 'ic-sm')}</button><button class="skip" data-action="rest-skip">Skip</button></div>` : ''}
-        ${w.exercises.length ? w.exercises.map((ex, i) => exerciseCard(ex, i)).join('') : `<div class="card empty-workout"><div class="icon-box">${ic('dumbbell')}</div><strong>Start with your first exercise</strong><p>Add an exercise below and log your sets as you go.</p></div>`}
-        <div class="workout-actions"><button class="outline" data-action="open-picker">${ic('plus', 'ic-sm')} Add exercise</button><button class="outline" data-action="toggle-notes">${ic('pencil', 'ic-sm')} ${state.showNotes || w.notes ? 'Workout notes' : 'Add workout note'}</button>${state.showNotes || w.notes ? `<textarea class="note" id="workout-note" placeholder="Knee felt good today…">${w.notes}</textarea>` : ''}</div>
+        ${w.exercises.length ? w.exercises.map((ex, i) => exerciseCard(ex, i)).join('') : `<div class="card empty-workout"><div class="icon-box">${ic('barbell')}</div><strong>Start with your first exercise</strong><p>Add an exercise below and log your sets as you go.</p></div>`}
+        <div class="workout-actions"><button class="outline" data-action="open-picker">${ic('plus', 'ic-sm')} Add exercise</button><button class="outline" data-action="toggle-notes">${ic('pencil-simple', 'ic-sm')} ${state.showNotes || w.notes ? 'Workout notes' : 'Add workout note'}</button>${state.showNotes || w.notes ? `<textarea class="note" id="workout-note" placeholder="Knee felt good today…">${w.notes}</textarea>` : ''}</div>
       </div></section>${state.showPicker ? picker() : ''}`;
     }
     function exerciseCard(ex, exerciseIndex) {
-      return `<div class="exercise-card ${ex.superset ? 'superset' : ''}"><div class="exercise-head"><div class="exercise-number">${exerciseIndex + 1}</div><div class="exercise-copy"><div class="exercise-name"><strong>${ex.name}</strong>${ex.superset ? `<span class="superset-label">SUPERSET ${ex.superset}</span>` : ''}</div><div class="exercise-meta">${ex.equipment} · ${ex.muscle} · ${ex.tracking}</div></div><button class="more-btn" data-action="remove-exercise" data-index="${exerciseIndex}" aria-label="Remove exercise">${ic('more-horizontal', 'ic-sm')}</button></div><div class="previous"><label>PREVIOUS</label><strong>${ex.previous}</strong><span>Compare</span></div><div class="set-header"><span>SET</span><span>KG</span><span>REPS</span><span>RPE</span><span></span></div>${ex.sets.map((s, setIndex) => setRow(s, exerciseIndex, setIndex)).join('')}<button class="add-set" data-action="add-set" data-index="${exerciseIndex}">${ic('plus', 'ic-sm')} Add set</button>${ex.note ? `<p class="exercise-note">${ex.note}</p>` : ''}</div>`;
+      return `<div class="exercise-card ${ex.superset ? 'superset' : ''}"><div class="exercise-head"><div class="exercise-number">${exerciseIndex + 1}</div><div class="exercise-copy"><div class="exercise-name"><strong>${ex.name}</strong>${ex.superset ? `<span class="superset-label">SUPERSET ${ex.superset}</span>` : ''}</div><div class="exercise-meta">${ex.equipment} · ${ex.muscle} · ${ex.tracking}</div></div><button class="more-btn" data-action="remove-exercise" data-index="${exerciseIndex}" aria-label="Remove exercise">${ic('dots-three', 'ic-sm')}</button></div><div class="previous"><label>PREVIOUS</label><strong>${ex.previous}</strong><span>Compare</span></div><div class="set-header"><span>SET</span><span>KG</span><span>REPS</span><span>RPE</span><span></span></div>${ex.sets.map((s, setIndex) => setRow(s, exerciseIndex, setIndex)).join('')}<button class="add-set" data-action="add-set" data-index="${exerciseIndex}">${ic('plus', 'ic-sm')} Add set</button>${ex.note ? `<p class="exercise-note">${ex.note}</p>` : ''}</div>`;
     }
     function setRow(set, exerciseIndex, setIndex) {
       const rpeClass = !set.rpe ? '' : set.rpe >= 9 ? 'high' : 'mid';
       return `<div class="set-row ${set.completed ? 'done' : ''}"><span class="set-number ${set.type !== 'Regular' ? 'special' : ''}" data-action="cycle-type" data-exercise="${exerciseIndex}" data-set="${setIndex}">${set.type === 'Regular' ? setIndex + 1 : `${setIndex + 1} · ${set.type[0]}`}</span><input aria-label="Weight" inputmode="decimal" value="${set.weight}" data-exercise="${exerciseIndex}" data-set="${setIndex}" data-field="weight" ${set.completed ? 'disabled' : ''}><input aria-label="Reps" inputmode="numeric" value="${set.reps}" data-exercise="${exerciseIndex}" data-set="${setIndex}" data-field="reps" ${set.completed ? 'disabled' : ''}><span class="rpe ${rpeClass}" data-action="cycle-rpe" data-exercise="${exerciseIndex}" data-set="${setIndex}">${set.rpe || '—'}</span><button class="check ${set.completed ? 'done' : ''}" data-action="complete-set" data-exercise="${exerciseIndex}" data-set="${setIndex}" aria-label="${set.completed ? 'Mark set incomplete' : 'Mark set complete'}">${set.completed ? ic('check', 'ic-sm') : ''}</button></div>`;
+    }
+    const EXERCISE_CATEGORIES = ['Chest', 'Back', 'Shoulders', 'Arms', 'Legs', 'Core', 'Cardio'];
+    const TRACKING_TYPES = ['kg × reps', 'reps', 'time', 'distance × time', 'duration', 'assist × reps'];
+    function customExerciseModalView() {
+      return `<div class="modal-backdrop" data-action="close-custom-exercise-modal"><div class="modal" data-action="noop">
+        <div class="modal-head"><h3>Add custom exercise</h3><button class="more-btn" data-action="close-custom-exercise-modal" aria-label="Close">${ic('x')}</button></div>
+        <label class="field-label" for="custom-ex-name">Name</label>
+        <input id="custom-ex-name" class="library-search" style="margin-bottom:12px" placeholder="e.g. Landmine Press" autocomplete="off">
+        <label class="field-label" for="custom-ex-category">Category</label>
+        <select id="custom-ex-category" class="library-search" style="margin-bottom:12px">${EXERCISE_CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('')}</select>
+        <label class="field-label" for="custom-ex-equipment">Equipment</label>
+        <input id="custom-ex-equipment" class="library-search" style="margin-bottom:12px" placeholder="e.g. Barbell" autocomplete="off">
+        <label class="field-label" for="custom-ex-muscle">Primary muscle</label>
+        <input id="custom-ex-muscle" class="library-search" style="margin-bottom:12px" placeholder="e.g. Shoulders" autocomplete="off">
+        <label class="field-label" for="custom-ex-tracking">How you'll track it</label>
+        <select id="custom-ex-tracking" class="library-search" style="margin-bottom:16px">${TRACKING_TYPES.map(t => `<option value="${t}">${t}</option>`).join('')}</select>
+        ${state.customExerciseError ? `<p style="color:var(--danger);font-size:12px;margin-bottom:12px">${state.customExerciseError}</p>` : ''}
+        <button class="primary" style="width:100%;justify-content:center" data-action="submit-custom-exercise">${ic('plus', 'ic-sm')} Add exercise</button>
+      </div></div>`;
     }
     function authModalView() {
       const isSignUp = state.authModalMode === 'signup';
@@ -1070,10 +1197,23 @@
         <button class="skip-onboarding" data-action="toggle-auth-mode">${isSignUp ? 'Already have an account? Sign in' : 'New here? Create an account'}</button>
       </div></div>`;
     }
-    function picker() { return `<div class="modal-backdrop" data-action="close-picker-backdrop"><div class="modal" data-action="noop"><div class="modal-head"><h3>Add exercise <span class="subtle" style="font-size:11px;font-weight:500">· ${exercises.length} ready</span></h3><button class="more-btn" data-action="close-picker" aria-label="Close">${ic('x')}</button></div>${exercises.map(ex => `<button class="exercise-option" data-action="add-exercise" data-exercise-id="${ex.id}"><img class="exercise-art" src="${iconFor(ex.category)}" alt=""><b>${ex.name}</b><span>${ex.tracking}</span></button>`).join('')}</div></div>`; }
+    function pickerOptions() {
+      const query = state.pickerQuery.trim().toLowerCase();
+      const rows = allExercises().filter(ex => !query || `${ex.name} ${ex.muscle} ${ex.equipment}`.toLowerCase().includes(query));
+      return rows.length
+        ? rows.map(ex => `<button class="exercise-option" data-action="add-exercise" data-exercise-id="${ex.id}"><img class="exercise-art" src="${iconFor(ex.category)}" alt=""><b>${ex.name}</b><span>${ex.tracking}</span></button>`).join('')
+        : `<p class="subtle" style="padding:16px 2px">No movements match that search.</p>`;
+    }
+    function picker() {
+      return `<div class="modal-backdrop" data-action="close-picker-backdrop"><div class="modal" data-action="noop">
+        <div class="modal-head"><h3>Add exercise <span class="subtle" style="font-size:11px;font-weight:500">· ${allExercises().length} ready</span></h3><button class="more-btn" data-action="close-picker" aria-label="Close">${ic('x')}</button></div>
+        <input class="library-search" id="picker-search" placeholder="Search exercises, muscle, equipment" value="${state.pickerQuery}" style="margin-bottom:12px" autocomplete="off">
+        <button class="outline" style="margin-bottom:10px" data-action="open-custom-exercise-modal">${ic('plus', 'ic-sm')} Add custom exercise</button>
+        <div id="picker-options">${pickerOptions()}</div>
+      </div></div>`;
+    }
 
     function enhanceMotion() {
-      if (window.lucide) lucide.createIcons();
       const reduced = prefersReducedMotion();
       const nodes = document.querySelectorAll('.reveal');
       const motion = window.animejs || window.anime;
@@ -1118,7 +1258,7 @@
       const doRender = () => {
         const root = document.querySelector('#app');
         const view = state.onboarding ? onboardingView() : state.screen === 'library' ? libraryView() : state.screen === 'history' ? historyView() : state.screen === 'exercise-detail' ? exerciseDetailView() : state.workout ? workoutView() : state.tab === 'today' ? todayView() : state.tab === 'routines' ? routinesView() : state.tab === 'settings' ? settingsView() : progressView();
-        root.innerHTML = view + (state.showAuthModal ? authModalView() : '');
+        root.innerHTML = view + (state.showAuthModal ? authModalView() : '') + (state.showCustomExerciseModal ? customExerciseModalView() : '');
         requestAnimationFrame(enhanceMotion);
       };
       if (document.startViewTransition && !prefersReducedMotion()) {
@@ -1131,7 +1271,7 @@
         doRender();
       }
     }
-    function showToast(message) { const node = document.querySelector('#toast'); node.innerHTML = `${ic('check-circle-2', 'ic-sm')}<span>${message}</span>`; if (window.lucide) lucide.createIcons({ nameAttr: 'data-lucide' }); node.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => node.classList.remove('show'), 2600); }
+    function showToast(message) { const node = document.querySelector('#toast'); node.innerHTML = `${ic('check-circle', 'ic-sm')}<span>${message}</span>`; node.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => node.classList.remove('show'), 2600); }
     function selectedSet(exerciseIndex, setIndex) { return state.workout.exercises[exerciseIndex].sets[setIndex]; }
     function cycleRpe(set) { set.rpe = set.rpe ? (set.rpe >= 10 ? '' : Number(set.rpe) + 1) : 6; }
     function cycleType(set) { const types = ['Regular', 'Warm-up', 'Drop', 'Failure']; set.type = types[(types.indexOf(set.type) + 1) % types.length]; }
@@ -1168,6 +1308,36 @@
       }
       if (action === 'open-auth-modal') { state.showAuthModal = true; state.authModalMode = 'signin'; state.authError = ''; state.authInfo = ''; render(); return; }
       if (action === 'close-auth-modal') { state.showAuthModal = false; render(); return; }
+      if (action === 'open-custom-exercise-modal') { state.showCustomExerciseModal = true; state.customExerciseError = ''; render(); return; }
+      if (action === 'close-custom-exercise-modal') { state.showCustomExerciseModal = false; render(); return; }
+      if (action === 'submit-custom-exercise') {
+        const name = document.querySelector('#custom-ex-name')?.value.trim() || '';
+        const category = document.querySelector('#custom-ex-category')?.value || EXERCISE_CATEGORIES[0];
+        const equipment = document.querySelector('#custom-ex-equipment')?.value.trim() || 'Other';
+        const muscle = document.querySelector('#custom-ex-muscle')?.value.trim() || category;
+        const tracking = document.querySelector('#custom-ex-tracking')?.value || TRACKING_TYPES[0];
+        if (!name) { state.customExerciseError = 'Give it a name'; render(); return; }
+        const newExercise = { id: `custom-${Date.now()}`, name, category, equipment, muscle, tracking, custom: true };
+        state.customExercises.push(newExercise);
+        localStorage.setItem('liftlog_custom_exercises', JSON.stringify(state.customExercises));
+        state.showCustomExerciseModal = false;
+        state.customExerciseError = '';
+        render();
+        showToast(`${name} added to your library`);
+        return;
+      }
+      if (action === 'delete-custom-exercise') {
+        const id = target.dataset.exerciseId;
+        const exercise = state.customExercises.find(ex => ex.id === id);
+        if (exercise && confirm(`Remove "${exercise.name}" from your custom exercises?`)) {
+          state.customExercises = state.customExercises.filter(ex => ex.id !== id);
+          localStorage.setItem('liftlog_custom_exercises', JSON.stringify(state.customExercises));
+          const list = document.querySelector('.library-list');
+          if (list) list.innerHTML = libraryItems(); else render();
+          showToast('Custom exercise removed');
+        }
+        return;
+      }
       if (action === 'toggle-auth-mode') { state.authModalMode = state.authModalMode === 'signup' ? 'signin' : 'signup'; state.authError = ''; state.authInfo = ''; render(); return; }
       if (action === 'submit-auth') {
         const email = (document.querySelector('#auth-email')?.value || '').trim();
@@ -1214,6 +1384,35 @@
         return;
       }
       if (action === 'reset-history') { state.history = []; localStorage.setItem('liftlog_history', JSON.stringify(state.history)); render(); showToast('Demo history cleared'); return; }
+      if (action === 'delete-demo-workout') {
+        const id = target.dataset.workoutId;
+        const item = state.history.find(h => h.id === id);
+        if (item && confirm(`Delete "${item.name}"? This can't be undone.`)) {
+          state.history = state.history.filter(h => h.id !== id);
+          localStorage.setItem('liftlog_history', JSON.stringify(state.history));
+          render();
+          showToast('Workout deleted');
+        }
+        return;
+      }
+      if (action === 'delete-real-workout') {
+        const id = target.dataset.workoutId;
+        if (!confirm('Delete this workout from Supabase? This can\'t be undone.')) return;
+        supabaseRestRequest('DELETE', `workouts?id=eq.${id}`).then(() => {
+          showToast('Workout deleted');
+          return fetchRealWorkouts();
+        }).then(render).catch(error => showToast(`Could not delete · ${error.message}`));
+        return;
+      }
+      if (action === 'export-data') {
+        try {
+          exportData();
+          showToast('Export downloaded');
+        } catch (error) {
+          showToast(`Export failed · ${error.message}`);
+        }
+        return;
+      }
       if (action === 'replay-onboarding') { state.onboarding = true; state.onboardingStep = 0; localStorage.removeItem('liftlog_onboarded'); render(); return; }
       if (action === 'progress-range') { state.progressRange = target.dataset.range; localStorage.setItem('liftlog_progress_range', state.progressRange); render(); return; }
       if (action === 'exercise-detail') { state.selectedExercise = target.dataset.exerciseId || 'bench'; state.screen = 'exercise-detail'; render(); return; }
@@ -1244,9 +1443,9 @@
           showToast('Workout logged · sign in (Real mode) to sync it to Supabase');
         }
       }
-      if (action === 'open-picker') { state.showPicker = true; render(); }
+      if (action === 'open-picker') { state.showPicker = true; state.pickerQuery = ''; render(); }
       if (action === 'close-picker') { state.showPicker = false; render(); }
-      if (action === 'add-exercise') { const ex = exercises.find(x => x.id === target.dataset.exerciseId); state.workout.exercises.push({ ...ex, previous: 'No history yet', note: '', superset: '', sets: [{ weight: '', reps: '', rpe: '', completed: false, type: 'Regular' }] }); state.showPicker = false; render(); }
+      if (action === 'add-exercise') { const ex = allExercises().find(x => x.id === target.dataset.exerciseId); state.workout.exercises.push({ ...ex, previous: 'No history yet', note: '', superset: '', sets: [{ weight: '', reps: '', rpe: '', completed: false, type: 'Regular' }] }); state.showPicker = false; render(); }
       if (action === 'remove-exercise') { state.workout.exercises.splice(Number(target.dataset.index), 1); render(); }
       if (action === 'add-set') { state.workout.exercises[Number(target.dataset.index)].sets.push({ weight: '', reps: '', rpe: '', completed: false, type: 'Regular' }); render(); }
       if (action === 'complete-set') {
@@ -1264,7 +1463,7 @@
       if (action === 'toggle-notes') { state.showNotes = !state.showNotes; render(); }
       if (action === 'toast') { showToast(target.dataset.message || 'Coming soon'); }
     });
-    document.addEventListener('input', event => { const input = event.target; if (input.id === 'name-input') { state.userName = input.value; return; } if (input.id === 'settings-name') { state.userName = input.value; localStorage.setItem('liftlog_name', state.userName || 'Athlete'); return; } if (input.id === 'auth-email') { state.authEmail = input.value; return; } if (input.id === 'auth-password') { state.authPassword = input.value; return; } if (input.id === 'library-search') { state.libraryQuery = input.value; const list = document.querySelector('.library-list'); if (list) { list.innerHTML = libraryItems(); if (window.lucide) lucide.createIcons(); } return; } if (input.id === 'workout-note') { state.workout.notes = input.value; return; } if (input.dataset.field) { const set = selectedSet(Number(input.dataset.exercise), Number(input.dataset.set)); set[input.dataset.field] = input.value; } });
+    document.addEventListener('input', event => { const input = event.target; if (input.id === 'name-input') { state.userName = input.value; return; } if (input.id === 'settings-name') { state.userName = input.value; localStorage.setItem('liftlog_name', state.userName || 'Athlete'); return; } if (input.id === 'auth-email') { state.authEmail = input.value; return; } if (input.id === 'auth-password') { state.authPassword = input.value; return; } if (input.id === 'library-search') { state.libraryQuery = input.value; const list = document.querySelector('.library-list'); if (list) list.innerHTML = libraryItems(); return; } if (input.id === 'picker-search') { state.pickerQuery = input.value; const list = document.querySelector('#picker-options'); if (list) list.innerHTML = pickerOptions(); return; } if (input.id === 'workout-note') { state.workout.notes = input.value; return; } if (input.dataset.field) { const set = selectedSet(Number(input.dataset.exercise), Number(input.dataset.set)); set[input.dataset.field] = input.value; } });
     tickTimer = setInterval(() => {
       if (!state.workout) return;
       const elapsedNode = document.querySelector('.workout-title span');
