@@ -898,7 +898,9 @@
           : realRows.length
             ? realRows.slice(0, 4).map(row => history(row.name, `${formatRelativeDate(row.started_at)} · ${formatMinutes(row.duration_seconds)}`, `${Math.round(row.total_volume || 0).toLocaleString()} kg`, '')).join('')
             : emptyState('dumbbell', 'No sessions yet', 'Finish a workout and it will show up here, synced to your account.'))
-        : state.history.slice(0, 4).map(item => history(item.name, item.meta, item.metric, item.pr)).join('');
+        : (state.history.length
+          ? state.history.slice(0, 4).map(item => history(item.name, item.meta, item.metric, item.pr)).join('')
+          : emptyState('dumbbell', 'No sessions yet', 'Finish a workout and it will show up here.'));
       return `<section class="screen"><div class="glow"></div><div class="scroll">
         <div class="topline"><div class="topline-copy"><div class="eyebrow">${ic('calendar', 'ic-sm')} ${new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' }).format(new Date()).toUpperCase()}</div><h1>Good morning, ${displayName()},<br>ready to lift?</h1></div>${cloudPill()}</div>
         ${card(`<div class="focus-copy"><div class="eyebrow">TODAY'S FOCUS</div><h2>Upper strength</h2><div class="focus-meta">7 exercises · about 52 min</div><button class="primary" data-action="start-routine" data-routine="upper">${ic('play', 'ic-sm')} Start Upper A</button></div><div class="week-ring"><svg viewBox="0 0 88 88"><circle class="track" cx="44" cy="44" r="38"></circle><circle class="fill" cx="44" cy="44" r="38" stroke-dasharray="${ringCirc}" stroke-dashoffset="${ringOffset}"></circle></svg><span>${ringDone}<small>of ${weeklyGoal}</small></span></div>`, 'focus-card')}
@@ -915,7 +917,7 @@
     function history(name, meta, metric, pr) { return `<div class="history-row"><div class="history-icon">${ic('dumbbell', 'ic-sm')}</div><div class="history-copy"><strong>${name}</strong><span>${meta}</span></div><div class="history-metric"><strong>${metric}</strong><span class="pr">${pr}</span></div></div>`; }
     function historyView() {
       return `<section class="screen"><div class="scroll"><div class="library-header"><button class="back-btn" data-action="close-history" aria-label="Back">${ic('chevron-left')}</button><div><h2>Session history</h2><p class="library-count">${state.history.length} logged sessions</p></div></div>
-        ${card(state.history.map(item => history(item.name, item.meta, item.metric, item.pr)).join(''))}
+        ${state.history.length ? card(state.history.map(item => history(item.name, item.meta, item.metric, item.pr)).join('')) : emptyState('dumbbell', 'No sessions yet', 'Finish a workout and it will show up here.')}
       </div></section>`;
     }
 
@@ -956,7 +958,7 @@
         ${card(settingToggleRow('adaptive-theme', 'Adaptive daily theme', 'Shifts the background mood with the time of day — sunny mornings, clear days, moody evenings, starry nights. Purely decorative, never changes text or button colors.', state.adaptiveTheme))}
         ${section('Data')}
         ${card(`<div class="settings-row"><div class="settings-copy"><strong>Mode</strong><span>${state.mode === 'demo' ? 'Demo preview data' : (state.session ? `Real · synced as ${state.session.email}` : 'Real mode')}</span></div><button class="mode-action" data-action="toggle-mode">${state.mode === 'demo' ? 'Go real' : 'Go demo'}</button></div>`)}
-        ${card(`<button class="outline" data-action="reset-history">${ic('rotate-ccw', 'ic-sm')} Reset sample history</button>`)}
+        ${card(`<button class="outline" data-action="reset-history">${ic('rotate-ccw', 'ic-sm')} Clear demo history</button>`)}
         ${section('About')}
         ${card(`<button class="outline" data-action="replay-onboarding">${ic('play', 'ic-sm')} Replay onboarding</button>`)}
         ${card(`<div class="settings-row settings-foot"><div class="settings-copy"><strong>LiftLog</strong><span>Interactive preview build · ${exercises.length} exercises</span></div></div>`)}
@@ -1211,7 +1213,7 @@
         render();
         return;
       }
-      if (action === 'reset-history') { state.history = seedHistory.slice(); localStorage.setItem('liftlog_history', JSON.stringify(state.history)); render(); showToast('Sample history reset'); return; }
+      if (action === 'reset-history') { state.history = []; localStorage.setItem('liftlog_history', JSON.stringify(state.history)); render(); showToast('Demo history cleared'); return; }
       if (action === 'replay-onboarding') { state.onboarding = true; state.onboardingStep = 0; localStorage.removeItem('liftlog_onboarded'); render(); return; }
       if (action === 'progress-range') { state.progressRange = target.dataset.range; localStorage.setItem('liftlog_progress_range', state.progressRange); render(); return; }
       if (action === 'exercise-detail') { state.selectedExercise = target.dataset.exerciseId || 'bench'; state.screen = 'exercise-detail'; render(); return; }
