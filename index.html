@@ -69,6 +69,12 @@
     .ic-lg { width: 26px; height: 26px; }
 
     .app-shell { width: min(100%, 430px); min-height: 100vh; background: var(--shell); box-shadow: 0 0 0 1px #1c2027, var(--shadow-lg); position: relative; overflow: hidden; isolation: isolate; }
+    /* Ambient animated gradient, drawn once behind everything (never recreated by render()'s
+       innerHTML swap, since it lives outside #app). Canvas 2D radial-gradient blobs rather than a
+       WebGL/Three.js shader pipeline — this stays a dependency-free static file — but genuinely
+       animated and GPU-composited, not a static CSS blob. See initGradientBackground(). */
+    #shader-bg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; opacity: .55; }
+    #app { position: relative; z-index: 1; min-height: 100%; }
     .screen { min-height: 100vh; padding-bottom: 100px; position: relative; overflow: hidden; }
     .scroll { max-height: 100vh; overflow-y: auto; padding: 22px 18px 32px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
     .glow { position: absolute; top: -120px; right: -80px; width: 280px; height: 280px; border-radius: 50%; background: radial-gradient(circle, var(--glow-a, var(--ember-soft)), transparent 70%); filter: blur(30px); pointer-events: none; z-index: 0; animation: glow-drift 17s ease-in-out infinite; }
@@ -80,6 +86,25 @@
     :root[data-sky="day"] { --glow-a: rgba(93, 173, 255, .3); --glow-b: rgba(130, 150, 255, .2); }
     :root[data-sky="evening"] { --glow-a: rgba(120, 130, 190, .32); --glow-b: rgba(76, 66, 130, .26); }
     :root[data-sky="night"] { --glow-a: rgba(70, 85, 145, .32); --glow-b: rgba(36, 26, 80, .28); }
+    /* Real weather (opt-in): overrides the time-of-day mood above while active. Sunny gets an
+       actual sun disc, rainy gets a blurred falling-streak overlay, cloudy stays flat and grey. */
+    :root[data-weather] .app-shell::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+    :root[data-weather="sunny"] .app-shell::after {
+      background: radial-gradient(120px 120px at 82% 12%, rgba(255, 224, 140, .9), rgba(255, 214, 120, .35) 45%, transparent 70%);
+      filter: blur(2px);
+      animation: sun-pulse 6s ease-in-out infinite;
+    }
+    @keyframes sun-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .82; } }
+    :root[data-weather="rainy"] .app-shell::after {
+      background-image: repeating-linear-gradient(100deg, rgba(200, 220, 255, .16) 0 2px, transparent 2px 22px);
+      filter: blur(1px);
+      opacity: .5;
+      animation: rain-fall 0.6s linear infinite;
+    }
+    @keyframes rain-fall { from { background-position: 0 0; } to { background-position: -40px 90px; } }
+    :root[data-weather="cloudy"] .app-shell::after {
+      background: linear-gradient(160deg, rgba(140, 155, 175, .18), transparent 60%);
+    }
     .topline { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; position: relative; z-index: 1; }
     .topline-copy { flex: 1; }
     .eyebrow { color: var(--ember); font-size: 11px; line-height: 1.2; letter-spacing: .12em; font-weight: 800; text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
@@ -317,7 +342,7 @@
     .bar { cursor: pointer; }
     .bar:active { filter: brightness(1.2); }
 
-    .onboarding { min-height: 100vh; padding: 28px 22px; display: flex; flex-direction: column; justify-content: space-between; background: var(--shell); position: relative; overflow: hidden; }
+    .onboarding { min-height: 100vh; padding: 28px 22px; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden; }
     .mesh { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
     .mesh i { position: absolute; border-radius: 50%; filter: blur(50px); opacity: .55; animation: float 9s ease-in-out infinite; }
     .mesh i:nth-child(1) { width: 260px; height: 260px; background: var(--ember); top: -80px; right: -70px; }
@@ -380,6 +405,16 @@
     .chart-card .tag { align-self: start; }
     .chart-value small { color: var(--muted); font-size: 12px; font-weight: 700; font-family: 'Inter', sans-serif; letter-spacing: 0; }
     .chart-note { color: var(--muted); font-size: 11px; line-height: 1.4; margin-top: 10px; }
+    .radar-card { padding: 18px; }
+    .radar-chart { width: 100%; max-width: 240px; display: block; margin: 10px auto 0; overflow: visible; }
+    .radar-grid { fill: none; stroke: var(--line); stroke-width: 1; }
+    .radar-axis { stroke: var(--line); stroke-width: 1; }
+    .radar-fill { fill: var(--ember); fill-opacity: .2; }
+    .radar-outline { fill: none; stroke: var(--ember); stroke-width: 2; stroke-linejoin: round; }
+    .radar-dot { fill: var(--ember); stroke: var(--surface); stroke-width: 1.5; }
+    .radar-label { fill: var(--muted); font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; font-family: 'Inter', sans-serif; }
+    .radar-card .range-mini { display: flex; align-items: center; }
+    .radar-card .range-mini button:disabled { opacity: .35; }
     .spotlight-card { padding: 17px; cursor: pointer; }
     .spotlight-top { display: flex; gap: 11px; align-items: center; }
     .spotlight-top .exercise-art { width: 50px; height: 50px; }
@@ -462,7 +497,10 @@
   </style>
 </head>
 <body>
-  <main class="app-shell" id="app"></main>
+  <main class="app-shell">
+    <canvas id="shader-bg" aria-hidden="true"></canvas>
+    <div id="app"></div>
+  </main>
   <div class="toast" id="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/animejs@4.4.1/lib/anime.iife.min.js"></script>
   <script>
@@ -624,6 +662,10 @@
       realWorkouts: null,
       realLoading: false,
       customExercises: JSON.parse(localStorage.getItem('liftlog_custom_exercises') || '[]'),
+      radarWeekIndex: 0,
+      weatherEnabled: localStorage.getItem('liftlog_weather_enabled') === '1',
+      weather: JSON.parse(localStorage.getItem('liftlog_weather') || 'null'),
+      weatherLoading: false,
       showCustomExerciseModal: false,
       customExerciseError: '',
       showAuthModal: false,
@@ -654,6 +696,121 @@
     function applySkyMood() {
       if (state.adaptiveTheme) document.documentElement.setAttribute('data-sky', skyMoodFor());
       else document.documentElement.removeAttribute('data-sky');
+    }
+    // Real weather (opt-in, needs location) — a step up from the time-of-day mood above: a blue
+    // clear-sky look with a sun disc on sunny days, a blurred falling-rain overlay on rainy ones,
+    // a flatter grey on cloudy ones. Wins over the time-of-day mood while it's active; falls back
+    // to it automatically at night or when weather data isn't available.
+    const WEATHER_PALETTES = {
+      sunny: [[93, 176, 255], [255, 214, 120], [176, 220, 255]],
+      cloudy: [[120, 138, 158], [86, 100, 124], [150, 165, 182]],
+      rainy: [[58, 88, 138], [38, 58, 96], [76, 106, 148]],
+    };
+    function weatherMoodFromCode(code, isDay) {
+      if (!isDay) return null; // let the night time-of-day mood stand regardless of daytime weather
+      if (code === 0 || code === 1) return 'sunny';
+      if ([2, 3, 45, 48, 71, 73, 75, 77, 85, 86].includes(code)) return 'cloudy';
+      if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(code)) return 'rainy';
+      return null;
+    }
+    function applyWeatherMood() {
+      const mood = state.weatherEnabled ? state.weather?.mood : null;
+      if (mood) {
+        document.documentElement.setAttribute('data-weather', mood);
+        setGradientPalette(WEATHER_PALETTES[mood]);
+      } else {
+        document.documentElement.removeAttribute('data-weather');
+        setGradientPalette([[255, 90, 54], [167, 139, 250], [93, 216, 255]]);
+      }
+    }
+    // Open-Meteo: free, no API key, no account — a deliberate choice so this stays a
+    // dependency-free static file. Like the Supabase calls, this needs a host without the
+    // Artifact's fetch sandbox (GitHub Pages works; the published-artifact fallback won't).
+    function refreshWeather() {
+      if (!state.weatherEnabled) return;
+      if (!('geolocation' in navigator)) { showToast("This browser can't share your location"); return; }
+      state.weatherLoading = true;
+      navigator.geolocation.getCurrentPosition(
+        async position => {
+          try {
+            const { latitude, longitude } = position.coords;
+            const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude.toFixed(3)}&longitude=${longitude.toFixed(3)}&current=temperature_2m,weather_code,is_day`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const json = await response.json();
+            const current = json.current || {};
+            state.weather = {
+              tempC: Math.round(current.temperature_2m),
+              mood: weatherMoodFromCode(current.weather_code, current.is_day),
+              fetchedAt: Date.now(),
+            };
+            localStorage.setItem('liftlog_weather', JSON.stringify(state.weather));
+          } catch (error) {
+            showToast(isNetworkBlockedError(error) ? "Weather can't reach the internet from this preview link" : `Could not load weather · ${error.message}`);
+          } finally {
+            state.weatherLoading = false;
+            applyWeatherMood();
+            render();
+          }
+        },
+        () => { state.weatherLoading = false; showToast('Location permission is needed for weather theming'); render(); },
+        { timeout: 8000, maximumAge: 15 * 60 * 1000 },
+      );
+    }
+    // Animated flowing-gradient background (the "shadergradient.co vibe"), running behind every
+    // screen. This is Canvas 2D, not a WebGL/GLSL shader — shadergradient.co itself is a React +
+    // Three.js component and pulling that stack in would mean a build step, which breaks this
+    // app's "just open the file" design. This renders at reduced internal resolution (cheap,
+    // CSS-scaled up) with requestAnimationFrame, pauses on prefers-reduced-motion and when the
+    // tab is hidden, and lives outside #app so render()'s innerHTML swap never touches it.
+    // Mutable so weather/time-of-day mood can retint the animated background without tearing
+    // down and rebuilding the canvas/WebGL-ish loop. draw() below reads this fresh every frame.
+    let ambientColors = [[255, 90, 54], [167, 139, 250], [93, 216, 255]];
+    function setGradientPalette(colors) { ambientColors = colors; }
+    function initGradientBackground() {
+      const canvas = document.getElementById('shader-bg');
+      if (!canvas || prefersReducedMotion()) { if (canvas) canvas.hidden = true; return; }
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      const dpr = Math.min(1.5, window.devicePixelRatio || 1);
+      const RENDER_SCALE = 0.5;
+      let width = 0, height = 0;
+      function resize() {
+        const rect = canvas.parentElement.getBoundingClientRect();
+        width = Math.max(1, Math.round(rect.width * dpr * RENDER_SCALE));
+        height = Math.max(1, Math.round(rect.height * dpr * RENDER_SCALE));
+        canvas.width = width;
+        canvas.height = height;
+      }
+      resize();
+      window.addEventListener('resize', resize);
+      const positions = [
+        { x: 0.22, y: 0.18, r: 0.55, sx: 0.00013, sy: 0.00017, phase: 0 },
+        { x: 0.8, y: 0.75, r: 0.6, sx: 0.00016, sy: 0.00011, phase: 2.1 },
+        { x: 0.75, y: 0.15, r: 0.5, sx: 0.0001, sy: 0.00019, phase: 4.2 },
+      ];
+      let running = true;
+      document.addEventListener('visibilitychange', () => {
+        running = !document.hidden;
+        if (running) requestAnimationFrame(draw);
+      });
+      function draw(t) {
+        if (!running) return;
+        ctx.clearRect(0, 0, width, height);
+        ctx.globalCompositeOperation = 'lighter';
+        positions.forEach((b, i) => {
+          const rgb = ambientColors[i] || ambientColors[0];
+          const cx = (b.x + Math.sin(t * b.sx + b.phase) * 0.16) * width;
+          const cy = (b.y + Math.cos(t * b.sy + b.phase) * 0.16) * height;
+          const radius = Math.max(width, height) * b.r;
+          const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+          gradient.addColorStop(0, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},.55)`);
+          gradient.addColorStop(1, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0)`);
+          ctx.fillStyle = gradient;
+          ctx.fillRect(0, 0, width, height);
+        });
+        requestAnimationFrame(draw);
+      }
+      requestAnimationFrame(draw);
     }
     // Rapid back-to-back state changes can start a new View Transition before the browser has
     // finished tearing down the previous one; the outgoing transition's promises then reject
@@ -749,6 +906,44 @@
       localStorage.setItem('liftlog_session', JSON.stringify(session));
       return session;
     }
+    function decodeJwtPayload(token) {
+      try {
+        const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+        const json = decodeURIComponent(atob(base64).split('').map(c => `%${c.charCodeAt(0).toString(16).padStart(2, '0')}`).join(''));
+        return JSON.parse(json);
+      } catch (error) { return null; }
+    }
+    // Handles the redirect Supabase sends the confirmation-email link to: either
+    // #access_token=...&refresh_token=...&type=signup (success — the URL fragment carries a full
+    // session) or #error=access_denied&error_code=otp_expired&... (an expired/reused link, which
+    // is what a "leads to a 404" report usually really is once the Site URL/Redirect URLs are
+    // correct — see README's Supabase setup notes). Always strips the fragment afterward so the
+    // token doesn't linger in the address bar or browser history.
+    function handleAuthRedirect() {
+      const hash = window.location.hash;
+      if (hash.length < 2) return false;
+      const params = new URLSearchParams(hash.slice(1));
+      const errorDescription = params.get('error_description');
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+      if (errorDescription) {
+        showToast(`That confirmation link didn't work · ${errorDescription.replace(/\+/g, ' ')}. Try signing in, or sign up again for a fresh link.`);
+        return false;
+      }
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+      if (!accessToken || !refreshToken) return false;
+      const payload = decodeJwtPayload(accessToken);
+      if (!payload) return false;
+      persistSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        expires_in: Number(params.get('expires_in')) || 3600,
+        user: { id: payload.sub, email: payload.email },
+      });
+      state.mode = 'real';
+      localStorage.setItem('liftlog_mode', 'real');
+      return true;
+    }
     async function signUp(email, password) {
       const json = await supabaseAuthRequest('signup', { email, password });
       if (!json.access_token) throw new Error(json.msg || 'Check your inbox to confirm your email, then sign in.');
@@ -799,12 +994,19 @@
     }
     async function fetchRealWorkouts() {
       state.realLoading = true;
+      const baseSelect = 'id,name,started_at,duration_seconds,total_volume,status';
       try {
-        const rows = await supabaseRestRequest(
-          'GET',
-          'workouts?select=id,name,started_at,duration_seconds,total_volume,status&status=eq.completed&order=started_at.desc&limit=30',
-        );
+        let rows;
+        try {
+          // Preferred: includes muscle_breakdown for the radar chart.
+          rows = await supabaseRestRequest('GET', `workouts?select=${baseSelect},muscle_breakdown&status=eq.completed&order=started_at.desc&limit=60`);
+        } catch (columnError) {
+          // Falls back to pre-migration schema so the app still works before the
+          // muscle_breakdown migration has been run — see DATA_MODEL.md.
+          rows = await supabaseRestRequest('GET', `workouts?select=${baseSelect}&status=eq.completed&order=started_at.desc&limit=60`);
+        }
         state.realWorkouts = rows || [];
+        state.radarWeekIndex = 0;
       } catch (error) {
         state.realWorkouts = state.realWorkouts || [];
         showToast(`Could not load your data · ${error.message}`);
@@ -815,6 +1017,20 @@
     // Saves the workout's summary row for real. Per-exercise/per-set detail isn't written yet —
     // that needs mapping this preview's local exercise slugs to Supabase's exercise_library UUIDs
     // (workout_exercises.exercise_id is a foreign key), which is a follow-up.
+    // Per-category volume for this workout — powers the weekly muscle-focus radar chart.
+    // Needs supabase/migrations/20260914090000_add_muscle_breakdown.sql run first; if that
+    // column doesn't exist yet, Supabase will reject the insert with an unknown-column error
+    // (caught by the caller's .catch(), surfaced as a toast rather than a silent failure).
+    function computeMuscleBreakdown(workout) {
+      const breakdown = {};
+      EXERCISE_CATEGORIES.forEach(c => { breakdown[c] = 0; });
+      workout.exercises.forEach(ex => {
+        if (!(ex.category in breakdown)) return;
+        const volume = ex.sets.reduce((sum, s) => sum + (s.completed ? (Number(s.weight) || 0) * (Number(s.reps) || 0) : 0), 0);
+        breakdown[ex.category] += volume;
+      });
+      return breakdown;
+    }
     async function saveRealWorkout(workout, volume) {
       const durationSeconds = Math.max(0, Math.round((Date.now() - workout.started) / 1000));
       await supabaseRestRequest('POST', 'workouts', {
@@ -828,6 +1044,7 @@
         notes: workout.notes || '',
         status: 'completed',
         total_volume: volume,
+        muscle_breakdown: computeMuscleBreakdown(workout),
       });
     }
     // Export format is intentionally versioned (schemaVersion) — see DATA_MODEL.md for the full
@@ -866,6 +1083,68 @@
         csvRows.push([csvEscape(w.name), csvEscape(w.startedAt || w.loggedLabel), csvEscape(w.totalVolumeKg ?? w.totalVolumeLabel), csvEscape(w.pr || '')].join(','));
       });
       downloadTextFile(`liftlog-export-${stamp}.csv`, csvRows.join('\n'), 'text/csv');
+    }
+    const RADAR_AXES = ['Chest', 'Back', 'Shoulders', 'Arms', 'Legs', 'Core'];
+    // Monday-anchored week bucket — doesn't need to be strict ISO-8601, just consistent so the
+    // same calendar week always groups together.
+    function weekKey(dateInput) {
+      const date = new Date(dateInput);
+      date.setHours(0, 0, 0, 0);
+      const day = (date.getDay() + 6) % 7;
+      date.setDate(date.getDate() - day);
+      return date.toISOString().slice(0, 10);
+    }
+    function groupWeeklyMuscleBreakdown(rows) {
+      const weeks = {};
+      rows.forEach(row => {
+        const key = weekKey(row.started_at);
+        if (!weeks[key]) weeks[key] = {};
+        RADAR_AXES.forEach(c => { weeks[key][c] = (weeks[key][c] || 0) + (Number(row.muscle_breakdown?.[c]) || 0); });
+      });
+      return Object.entries(weeks).sort((a, b) => (a[0] < b[0] ? 1 : -1)); // newest week first
+    }
+    function radarChartSvg(breakdown) {
+      const size = 220, center = size / 2, radius = 78;
+      const max = Math.max(1, ...RADAR_AXES.map(a => breakdown[a] || 0));
+      const angleStep = (Math.PI * 2) / RADAR_AXES.length;
+      const pointAt = (value, index) => {
+        const angle = -Math.PI / 2 + index * angleStep;
+        const r = (value / max) * radius;
+        return [center + r * Math.cos(angle), center + r * Math.sin(angle)];
+      };
+      const gridPolys = [0.25, 0.5, 0.75, 1].map(level => RADAR_AXES.map((_, i) => {
+        const angle = -Math.PI / 2 + i * angleStep;
+        return `${(center + level * radius * Math.cos(angle)).toFixed(1)},${(center + level * radius * Math.sin(angle)).toFixed(1)}`;
+      }).join(' '));
+      const dataPoints = RADAR_AXES.map((a, i) => pointAt(breakdown[a] || 0, i));
+      const dataPoly = dataPoints.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+      const axisLines = RADAR_AXES.map((_, i) => {
+        const angle = -Math.PI / 2 + i * angleStep;
+        return `<line x1="${center}" y1="${center}" x2="${(center + radius * Math.cos(angle)).toFixed(1)}" y2="${(center + radius * Math.sin(angle)).toFixed(1)}" class="radar-axis"/>`;
+      }).join('');
+      const labels = RADAR_AXES.map((a, i) => {
+        const angle = -Math.PI / 2 + i * angleStep;
+        const lr = radius + 24;
+        return `<text x="${(center + lr * Math.cos(angle)).toFixed(1)}" y="${(center + lr * Math.sin(angle)).toFixed(1)}" class="radar-label" text-anchor="middle" dominant-baseline="middle">${a}</text>`;
+      }).join('');
+      return `<svg viewBox="0 0 ${size} ${size}" class="radar-chart" role="img" aria-label="Muscle focus this week">
+        ${gridPolys.map(p => `<polygon points="${p}" class="radar-grid"/>`).join('')}
+        ${axisLines}
+        <polygon points="${dataPoly}" class="radar-fill"/>
+        <polygon points="${dataPoly}" class="radar-outline"/>
+        ${dataPoints.map(p => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.5" class="radar-dot"/>`).join('')}
+        ${labels}
+      </svg>`;
+    }
+    function weeklyFocusCard(rows) {
+      const weeks = groupWeeklyMuscleBreakdown(rows);
+      if (!weeks.length) return '';
+      const index = Math.min(state.radarWeekIndex, weeks.length - 1);
+      const [key, breakdown] = weeks[index];
+      const total = RADAR_AXES.reduce((sum, a) => sum + (breakdown[a] || 0), 0);
+      const weekLabel = index === 0 ? 'This week' : new Date(key).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      const top = RADAR_AXES.slice().sort((a, b) => (breakdown[b] || 0) - (breakdown[a] || 0))[0];
+      return card(`<div class="chart-head"><div><h3>Weekly muscle focus</h3><p class="subtle" style="margin-top:4px">${total ? `Most worked: ${top}` : 'No categorized volume yet'}</p></div><div class="range-mini"><button data-action="radar-prev-week" ${index >= weeks.length - 1 ? 'disabled' : ''} aria-label="Previous week">${ic('caret-left', 'ic-sm')}</button><span class="tag" style="margin:0 4px">${weekLabel}</span><button data-action="radar-next-week" ${index === 0 ? 'disabled' : ''} aria-label="Next week">${ic('caret-right', 'ic-sm')}</button></div></div>${total ? radarChartSvg(breakdown) : `<p class="subtle" style="text-align:center;padding:24px 0">This week's sessions didn't record category detail — run the muscle_breakdown migration if you haven't yet (see DATA_MODEL.md).</p>`}`, 'radar-card');
     }
     function computeRealStats(rows) {
       const now = Date.now();
@@ -997,7 +1276,7 @@
           ? state.history.slice(0, 4).map(item => history(item, 'delete-demo-workout')).join('')
           : emptyState('dumbbell', 'No sessions yet', 'Finish a workout and it will show up here.'));
       return `<section class="screen"><div class="glow"></div><div class="scroll">
-        <div class="topline"><div class="topline-copy"><div class="eyebrow">${ic('calendar-blank', 'ic-sm')} ${new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' }).format(new Date()).toUpperCase()}</div><h1>Good morning, ${displayName()},<br>ready to lift?</h1></div>${cloudPill()}</div>
+        <div class="topline"><div class="topline-copy"><div class="eyebrow">${ic('calendar-blank', 'ic-sm')} ${new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' }).format(new Date()).toUpperCase()}${state.weatherEnabled && state.weather ? ` · ${state.weather.tempC}°C` : ''}</div><h1>Good morning, ${displayName()},<br>ready to lift?</h1></div>${cloudPill()}</div>
         ${card(`<div class="focus-copy"><div class="eyebrow">TODAY'S FOCUS</div><h2>Upper strength</h2><div class="focus-meta">7 exercises · about 52 min</div><button class="primary" data-action="start-routine" data-routine="upper">${ic('play', 'ic-sm')} Start Upper A</button></div><div class="week-ring"><svg viewBox="0 0 88 88"><circle class="track" cx="44" cy="44" r="38"></circle><circle class="fill" cx="44" cy="44" r="38" stroke-dasharray="${ringCirc}" stroke-dashoffset="${ringOffset}"></circle></svg><span>${ringDone}<small>of ${weeklyGoal}</small></span></div>`, 'focus-card')}
         ${modeCard()}
         ${section('Quick start', 'View all', 'data-tab="routines"')}
@@ -1019,6 +1298,16 @@
       return { id: row.id, name: row.name, meta: `${formatRelativeDate(row.started_at)} · ${formatMinutes(row.duration_seconds)}`, metric: `${Math.round(row.total_volume || 0).toLocaleString()} kg`, pr: '' };
     }
     function historyView() {
+      // Bug fixed here: this screen used to always read the local demo array, even in Real mode —
+      // so real Supabase workouts (including ones logging brand-new custom exercises) never showed
+      // up here. It now mirrors exactly what Today/Progress already switch on.
+      const isReal = state.mode === 'real' && !!state.session;
+      if (isReal) {
+        const rows = state.realWorkouts || [];
+        return `<section class="screen"><div class="scroll"><div class="library-header"><button class="back-btn" data-action="close-history" aria-label="Back">${ic('caret-left')}</button><div><h2>Session history</h2><p class="library-count">${state.realLoading ? 'Loading…' : `${rows.length} logged sessions`}</p></div></div>
+          ${state.realLoading ? `<p class="subtle" style="padding:16px 0">Loading your sessions…</p>` : rows.length ? card(rows.map(row => history(realRowToHistoryItem(row), 'delete-real-workout')).join('')) : emptyState('dumbbell', 'No sessions yet', 'Finish a workout and it will show up here, synced to your account.')}
+        </div></section>`;
+      }
       return `<section class="screen"><div class="scroll"><div class="library-header"><button class="back-btn" data-action="close-history" aria-label="Back">${ic('caret-left')}</button><div><h2>Session history</h2><p class="library-count">${state.history.length} logged sessions</p></div></div>
         ${state.history.length ? card(state.history.map(item => history(item, 'delete-demo-workout')).join('')) : emptyState('dumbbell', 'No sessions yet', 'Finish a workout and it will show up here.')}
       </div></section>`;
@@ -1059,6 +1348,7 @@
           : card(`<div class="settings-row"><div class="settings-copy"><strong>Not signed in</strong><span>Sign in to sync your training across devices.</span></div><button class="mode-action" data-action="open-auth-modal">Sign in</button></div>`)}
         ${section('Appearance')}
         ${card(settingToggleRow('adaptive-theme', 'Adaptive daily theme', 'Shifts the background mood with the time of day — sunny mornings, clear days, moody evenings, starry nights. Purely decorative, never changes text or button colors.', state.adaptiveTheme))}
+        ${card(settingToggleRow('weather-theme', 'Real weather theme', `Uses your location to match the mood to actual weather — blue and sunny, grey and overcast, or a rainy blur.${state.weatherEnabled && state.weather ? ` Currently ${state.weather.tempC}°C, ${state.weather.mood || 'clear'}.` : state.weatherEnabled && state.weatherLoading ? ' Getting your location…' : ''}`, state.weatherEnabled))}
         ${section('Data')}
         ${card(`<div class="settings-row"><div class="settings-copy"><strong>Mode</strong><span>${state.mode === 'demo' ? 'Demo preview data' : (state.session ? `Real · synced as ${state.session.email}` : 'Real mode')}</span></div><button class="mode-action" data-action="toggle-mode">${state.mode === 'demo' ? 'Go real' : 'Go demo'}</button></div>`)}
         ${card(`<button class="outline" data-action="export-data">${ic('export', 'ic-sm')} Export your data (JSON + CSV)</button>`)}
@@ -1098,10 +1388,11 @@
       const totalVolume = rows.reduce((sum, row) => sum + (Number(row.total_volume) || 0), 0);
       return `<section class="screen"><div class="glow"></div><div class="scroll">${header}
         <div class="stat-grid progress-summary">${stat('SESSIONS LOGGED', String(rows.length), 'all time')}${stat('TOTAL VOLUME', `${Math.round(totalVolume).toLocaleString()} kg`, 'all time')}</div>
+        ${weeklyFocusCard(rows)}
         ${section('Your sessions')}
         ${card(rows.map(row => history(realRowToHistoryItem(row), 'delete-real-workout')).join(''))}
         <button class="outline" style="margin-top:12px" data-action="export-data">${ic('export', 'ic-sm')} Export your data</button>
-        <p class="chart-note" style="margin-top:12px">Charts by muscle group and per-exercise trends arrive once there's more history to work with — per-set detail sync is a follow-up.</p>
+        <p class="chart-note" style="margin-top:12px">Per-exercise strength trends arrive once individual sets sync to Supabase — that's a follow-up.</p>
       </div>${nav()}</section>`;
     }
     function progressView() {
@@ -1380,6 +1671,11 @@
       if (action === 'toggle-setting') {
         const setting = target.dataset.setting;
         if (setting === 'adaptive-theme') { state.adaptiveTheme = !state.adaptiveTheme; localStorage.setItem('liftlog_adaptive_theme', state.adaptiveTheme ? '1' : '0'); applySkyMood(); }
+        if (setting === 'weather-theme') {
+          state.weatherEnabled = !state.weatherEnabled;
+          localStorage.setItem('liftlog_weather_enabled', state.weatherEnabled ? '1' : '0');
+          if (state.weatherEnabled) refreshWeather(); else { state.weather = null; localStorage.removeItem('liftlog_weather'); applyWeatherMood(); }
+        }
         render();
         return;
       }
@@ -1415,6 +1711,8 @@
       }
       if (action === 'replay-onboarding') { state.onboarding = true; state.onboardingStep = 0; localStorage.removeItem('liftlog_onboarded'); render(); return; }
       if (action === 'progress-range') { state.progressRange = target.dataset.range; localStorage.setItem('liftlog_progress_range', state.progressRange); render(); return; }
+      if (action === 'radar-prev-week') { state.radarWeekIndex += 1; render(); return; }
+      if (action === 'radar-next-week') { state.radarWeekIndex = Math.max(0, state.radarWeekIndex - 1); render(); return; }
       if (action === 'exercise-detail') { state.selectedExercise = target.dataset.exerciseId || 'bench'; state.screen = 'exercise-detail'; render(); return; }
       if (action === 'close-exercise-detail') { state.screen = 'app'; state.tab = 'progress'; render(); return; }
       if (action === 'exercise-metric') { state.exerciseMetric = target.dataset.metric; render(); return; }
@@ -1477,10 +1775,16 @@
         if (state.rest === 0) render();
       }
     }, 1000);
+    const confirmedJustNow = handleAuthRedirect();
     render();
     applySkyMood();
+    initGradientBackground();
+    applyWeatherMood();
+    if (state.weatherEnabled) refreshWeather();
     setInterval(applySkyMood, 5 * 60 * 1000);
-    if (state.mode === 'real' && state.session) fetchRealWorkouts().then(render);
+    setInterval(() => { if (state.weatherEnabled) refreshWeather(); }, 20 * 60 * 1000);
+    if (confirmedJustNow) { showToast(`Email confirmed — signed in as ${state.session.email}`); fetchRealWorkouts().then(render); }
+    else if (state.mode === 'real' && state.session) fetchRealWorkouts().then(render);
   </script>
 </body>
 </html>
