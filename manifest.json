@@ -4,8 +4,8 @@
   "description": "A strength-training logbook — log workouts, track PRs, and see your progress trend.",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#08090b",
-  "theme_color": "#08090b",
+  "background_color": "#071619",
+  "theme_color": "#071619",
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },

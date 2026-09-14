@@ -9,38 +9,43 @@
   <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#08090b">
+  <meta name="theme-color" content="#071619">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
       color-scheme: dark;
-      --bg: #08090b;
-      --shell: #0c0e11;
-      --surface: #14171c;
-      --surface-2: #1c2027;
-      --surface-3: #262b33;
-      --line: #23272f;
-      --line-soft: #1a1e24;
-      --text: #f5f6f8;
-      --text-dim: #c7cbd3;
-      --muted: #868d99;
-      --muted-2: #575e6a;
+      /* Retinted from a stormy teal/navy reference photo — deep near-black teal base, a bright
+         cyan-teal primary accent, bolder/more visible borders per the "techy, bold, bordered"
+         brief. Variable names kept as --ember/etc. to avoid touching ~150 call sites; only the
+         values changed. The ambient background additionally hue-shifts through the day (see
+         TIME_OF_DAY_PALETTES in the script) — cyan mornings, deep purple/blue nights. */
+      --bg: #071619;
+      --shell: #0a1a1e;
+      --surface: #0f262b;
+      --surface-2: #163239;
+      --surface-3: #1e3f47;
+      --line: #2d4d55;
+      --line-soft: #1c343b;
+      --text: #eef4f3;
+      --text-dim: #c3d4d2;
+      --muted: #86a4a2;
+      --muted-2: #4d6d6d;
 
-      --ember: #ff5a36;
-      --ember-2: #ff8354;
-      --ember-ink: #2a0800;
-      --ember-soft: rgba(255, 90, 54, .16);
+      --ember: #4fd1c5;
+      --ember-2: #7fe3da;
+      --ember-ink: #032220;
+      --ember-soft: rgba(79, 209, 197, .18);
       --mint: #34e0a1;
       --mint-ink: #04241a;
       --mint-soft: rgba(52, 224, 161, .16);
-      --sky: #5dd8ff;
-      --sky-soft: rgba(93, 216, 255, .16);
-      --violet: #a78bfa;
-      --violet-soft: rgba(167, 139, 250, .16);
+      --sky: #5b9fe3;
+      --sky-soft: rgba(91, 159, 227, .18);
+      --violet: #8b7fe8;
+      --violet-soft: rgba(139, 127, 232, .18);
       --amber: #ffb648;
-      --rose: #ff6fa5;
+      --rose: #d1709e;
       --danger: #ff6b6b;
 
       --r-sm: 12px;
@@ -55,7 +60,7 @@
       --shadow-sm: 0 1px 2px rgba(0,0,0,.5);
       --shadow-md: 0 10px 28px -12px rgba(0,0,0,.6);
       --shadow-lg: 0 24px 56px -20px rgba(0,0,0,.7);
-      --shadow-ember: 0 14px 32px -12px rgba(255,90,54,.45);
+      --shadow-ember: 0 14px 32px -12px rgba(79,209,197,.4);
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body { margin: 0; min-height: 100%; background: var(--bg); font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
@@ -73,7 +78,7 @@
        innerHTML swap, since it lives outside #app). Canvas 2D radial-gradient blobs rather than a
        WebGL/Three.js shader pipeline — this stays a dependency-free static file — but genuinely
        animated and GPU-composited, not a static CSS blob. See initGradientBackground(). */
-    #shader-bg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; opacity: .55; }
+    #shader-bg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; opacity: .6; filter: blur(6px); }
     #app { position: relative; z-index: 1; min-height: 100%; }
     .screen { min-height: 100vh; padding-bottom: 100px; position: relative; overflow: hidden; }
     .scroll { max-height: 100vh; overflow-y: auto; padding: 22px 18px 32px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
@@ -82,10 +87,10 @@
     /* Second ambient blob, mood-colored — invisible (transparent fallback) until a sky mood sets --glow-b */
     .screen::before { content: ""; position: absolute; width: 240px; height: 240px; border-radius: 50%; left: -70px; bottom: -50px; background: radial-gradient(circle, var(--glow-b, transparent), transparent 70%); filter: blur(50px); pointer-events: none; z-index: 0; animation: glow-drift-2 21s ease-in-out infinite; }
     @keyframes glow-drift-2 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(24px, -18px) scale(1.18); } }
-    :root[data-sky="morning"] { --glow-a: rgba(255, 184, 107, .32); --glow-b: rgba(255, 138, 90, .24); }
-    :root[data-sky="day"] { --glow-a: rgba(93, 173, 255, .3); --glow-b: rgba(130, 150, 255, .2); }
-    :root[data-sky="evening"] { --glow-a: rgba(120, 130, 190, .32); --glow-b: rgba(76, 66, 130, .26); }
-    :root[data-sky="night"] { --glow-a: rgba(70, 85, 145, .32); --glow-b: rgba(36, 26, 80, .28); }
+    :root[data-sky="morning"] { --glow-a: rgba(79, 209, 197, .34); --glow-b: rgba(127, 227, 218, .22); }
+    :root[data-sky="day"] { --glow-a: rgba(79, 209, 197, .28); --glow-b: rgba(91, 159, 227, .2); }
+    :root[data-sky="evening"] { --glow-a: rgba(91, 140, 180, .32); --glow-b: rgba(110, 90, 170, .26); }
+    :root[data-sky="night"] { --glow-a: rgba(90, 60, 180, .32); --glow-b: rgba(50, 40, 120, .28); }
     /* Real weather (opt-in): overrides the time-of-day mood above while active. Sunny gets an
        actual sun disc, rainy gets a blurred falling-streak overlay, cloudy stays flat and grey. */
     :root[data-weather] .app-shell::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0; }
@@ -122,7 +127,7 @@
 
     .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-sm); }
     .card + .card, .card + .outline, .outline + .card { margin-top: 12px; }
-    .focus-card { padding: 20px; background: linear-gradient(135deg, var(--ember) 0%, #ff7a49 55%, #ffa15f 100%); background-size: 200% 200%; animation: gradient-pan 11s ease-in-out infinite alternate; color: var(--ember-ink); border: 0; display: flex; gap: 14px; align-items: center; box-shadow: var(--shadow-ember); position: relative; overflow: hidden; }
+    .focus-card { padding: 20px; background: linear-gradient(135deg, var(--ember) 0%, #6fddd0 55%, #9ff0e5 100%); background-size: 200% 200%; animation: gradient-pan 11s ease-in-out infinite alternate; color: var(--ember-ink); border: 0; display: flex; gap: 14px; align-items: center; box-shadow: var(--shadow-ember); position: relative; overflow: hidden; }
     @keyframes gradient-pan { from { background-position: 0% 40%; } to { background-position: 100% 60%; } }
     .focus-card::after { content: ""; position: absolute; inset: 0; background: radial-gradient(120px 120px at 88% -10%, rgba(255,255,255,.35), transparent 70%); pointer-events: none; }
     .focus-card .focus-copy { flex: 1; position: relative; z-index: 1; }
@@ -609,8 +614,8 @@
       { id: 't-bar-row', name: 'T-Bar Row', equipment: 'Barbell', muscle: 'Back', category: 'Back', tracking: 'kg × reps' },
     ];
     const starterRoutines = [
-      { id: 'upper', name: 'Upper A', description: 'Strength · 7 exercises', program: 'Push / Pull / Legs', count: 7, last: 'Yesterday', color: '#ff5a36' },
-      { id: 'lower', name: 'Lower A', description: 'Squat focus · 6 exercises', program: 'Push / Pull / Legs', count: 6, last: '3 days ago', color: '#5dd8ff' },
+      { id: 'upper', name: 'Upper A', description: 'Strength · 7 exercises', program: 'Push / Pull / Legs', count: 7, last: 'Yesterday', color: '#4fd1c5' },
+      { id: 'lower', name: 'Lower A', description: 'Squat focus · 6 exercises', program: 'Push / Pull / Legs', count: 6, last: '3 days ago', color: '#5b9fe3' },
       { id: 'full', name: 'Full Body', description: 'Balanced · 5 exercises', program: 'Full Body', count: 5, last: 'Last Monday', color: '#ffb648' },
     ];
     const seedHistory = [
@@ -619,10 +624,10 @@
       { id: 'seed-3', name: 'Full Body', meta: 'Mon · 44 min', metric: '8,940 kg', pr: '+1 PR' },
     ];
     const progressRanges = {
-      '4 weeks': { prs: '4', days: '12', volume: '28,640', delta: '+8%', start: '4 weeks ago', workouts: '12 workouts', sets: '124 sets', bars: [48, 58, 42, 68, 56, 74, 65, 82], muscles: [['Back', 8, '#5b8def'], ['Chest', 7, '#ff5a36'], ['Quads', 6, '#ffb648'], ['Shoulders', 5, '#a78bfa'], ['Hamstrings', 4, '#ff6fa5']], timeline: [['Week 4 · now', 'Upper A · 82.5 → 85 kg bench', '+1 PR · 7,420 kg volume'], ['Week 2', 'Consistency came back', '3 training days · 6,180 kg volume'], ['Week 1', 'Baseline captured', '2 workouts · 5,920 kg volume']] },
-      '12 weeks': { prs: '14', days: '47', volume: '84,320', delta: '+18%', start: '12 weeks ago', workouts: '28 workouts', sets: '312 sets', bars: [38, 52, 44, 63, 58, 78, 68, 92, 81, 88, 74, 100], muscles: [['Back', 18, '#5b8def'], ['Chest', 14, '#ff5a36'], ['Quads', 12, '#ffb648'], ['Shoulders', 9, '#a78bfa'], ['Hamstrings', 8, '#ff6fa5']], timeline: [['Week 12 · now', 'Upper A · 80 → 85 kg bench', '+2 PRs · 12,480 kg volume'], ['Week 8', 'Consistency locked in', '4 training days · 11,020 kg volume'], ['Week 4', 'First measurable climb', '3 PRs · 7,840 kg volume'], ['Week 1', 'Baseline captured', '2 workouts · 5,920 kg volume']] },
-      '1 year': { prs: '48', days: '176', volume: '332,180', delta: '+23%', start: '1 year ago', workouts: '176 workouts', sets: '1,984 sets', bars: [35, 43, 51, 48, 60, 65, 58, 72, 78, 74, 88, 100], muscles: [['Back', 86, '#5b8def'], ['Chest', 78, '#ff5a36'], ['Quads', 70, '#ffb648'], ['Shoulders', 54, '#a78bfa'], ['Hamstrings', 46, '#ff6fa5']], timeline: [['Month 12 · now', 'Bench press crossed 85 kg', '+8 PRs · strongest month yet'], ['Month 9', 'Training streak reset', '12 consecutive weeks logged'], ['Month 6', 'Volume doubled', '88 workouts · +19% strength'], ['Month 1', 'Baseline captured', '11 workouts · 42,600 kg volume']] },
-      'All time': { prs: '71', days: '412', volume: '892,440', delta: '+31%', start: 'first session', workouts: '412 workouts', sets: '4,920 sets', bars: [26, 35, 32, 44, 49, 58, 55, 68, 72, 83, 88, 100], muscles: [['Back', 214, '#5b8def'], ['Chest', 198, '#ff5a36'], ['Quads', 176, '#ffb648'], ['Shoulders', 142, '#a78bfa'], ['Hamstrings', 118, '#ff6fa5']], timeline: [['Today', '71 lifetime PRs logged', '892,440 kg total volume'], ['Last year', 'Training became consistent', '176 training days · 48 PRs'], ['First 12 weeks', 'Baseline became a plan', '28 workouts · +18% volume']] },
+      '4 weeks': { prs: '4', days: '12', volume: '28,640', delta: '+8%', start: '4 weeks ago', workouts: '12 workouts', sets: '124 sets', bars: [48, 58, 42, 68, 56, 74, 65, 82], muscles: [['Back', 8, '#5b9fe3'], ['Chest', 7, '#4fd1c5'], ['Quads', 6, '#ffb648'], ['Shoulders', 5, '#8b7fe8'], ['Hamstrings', 4, '#d1709e']], timeline: [['Week 4 · now', 'Upper A · 82.5 → 85 kg bench', '+1 PR · 7,420 kg volume'], ['Week 2', 'Consistency came back', '3 training days · 6,180 kg volume'], ['Week 1', 'Baseline captured', '2 workouts · 5,920 kg volume']] },
+      '12 weeks': { prs: '14', days: '47', volume: '84,320', delta: '+18%', start: '12 weeks ago', workouts: '28 workouts', sets: '312 sets', bars: [38, 52, 44, 63, 58, 78, 68, 92, 81, 88, 74, 100], muscles: [['Back', 18, '#5b9fe3'], ['Chest', 14, '#4fd1c5'], ['Quads', 12, '#ffb648'], ['Shoulders', 9, '#8b7fe8'], ['Hamstrings', 8, '#d1709e']], timeline: [['Week 12 · now', 'Upper A · 80 → 85 kg bench', '+2 PRs · 12,480 kg volume'], ['Week 8', 'Consistency locked in', '4 training days · 11,020 kg volume'], ['Week 4', 'First measurable climb', '3 PRs · 7,840 kg volume'], ['Week 1', 'Baseline captured', '2 workouts · 5,920 kg volume']] },
+      '1 year': { prs: '48', days: '176', volume: '332,180', delta: '+23%', start: '1 year ago', workouts: '176 workouts', sets: '1,984 sets', bars: [35, 43, 51, 48, 60, 65, 58, 72, 78, 74, 88, 100], muscles: [['Back', 86, '#5b9fe3'], ['Chest', 78, '#4fd1c5'], ['Quads', 70, '#ffb648'], ['Shoulders', 54, '#8b7fe8'], ['Hamstrings', 46, '#d1709e']], timeline: [['Month 12 · now', 'Bench press crossed 85 kg', '+8 PRs · strongest month yet'], ['Month 9', 'Training streak reset', '12 consecutive weeks logged'], ['Month 6', 'Volume doubled', '88 workouts · +19% strength'], ['Month 1', 'Baseline captured', '11 workouts · 42,600 kg volume']] },
+      'All time': { prs: '71', days: '412', volume: '892,440', delta: '+31%', start: 'first session', workouts: '412 workouts', sets: '4,920 sets', bars: [26, 35, 32, 44, 49, 58, 55, 68, 72, 83, 88, 100], muscles: [['Back', 214, '#5b9fe3'], ['Chest', 198, '#4fd1c5'], ['Quads', 176, '#ffb648'], ['Shoulders', 142, '#8b7fe8'], ['Hamstrings', 118, '#d1709e']], timeline: [['Today', '71 lifetime PRs logged', '892,440 kg total volume'], ['Last year', 'Training became consistent', '176 training days · 48 PRs'], ['First 12 weeks', 'Baseline became a plan', '28 workouts · +18% volume']] },
     };
     const tourFeatures = [
       { number: '01 / LOG FAST', glyph: 'lightning', title: 'Never lose the last set.', copy: 'Previous performance stays beside every set, so progressive overload is a decision—not a memory test.' },
@@ -693,9 +698,20 @@
       if (h >= 17 && h < 21) return 'evening';
       return 'night';
     }
+    // Hue-shifts the swaying ambient background through the day: bright cyan in the morning, the
+    // base teal through the day, a blue/violet transition in the evening, deep purple/dark blue
+    // at night — sampled from the same reference palette as everything else, just rotated. Real
+    // weather (below) overrides this while it's on and has data.
+    const TIME_OF_DAY_PALETTES = {
+      morning: [[79, 209, 197], [127, 227, 218], [91, 159, 227]],
+      day: [[79, 209, 197], [76, 118, 122], [91, 159, 227]],
+      evening: [[91, 140, 180], [110, 90, 170], [60, 110, 120]],
+      night: [[90, 60, 180], [50, 40, 120], [70, 90, 160]],
+    };
     function applySkyMood() {
       if (state.adaptiveTheme) document.documentElement.setAttribute('data-sky', skyMoodFor());
       else document.documentElement.removeAttribute('data-sky');
+      updateAmbientPalette();
     }
     // Real weather (opt-in, needs location) — a step up from the time-of-day mood above: a blue
     // clear-sky look with a sun disc on sunny days, a blurred falling-rain overlay on rainy ones,
@@ -715,13 +731,18 @@
     }
     function applyWeatherMood() {
       const mood = state.weatherEnabled ? state.weather?.mood : null;
-      if (mood) {
-        document.documentElement.setAttribute('data-weather', mood);
-        setGradientPalette(WEATHER_PALETTES[mood]);
-      } else {
-        document.documentElement.removeAttribute('data-weather');
-        setGradientPalette([[255, 90, 54], [167, 139, 250], [93, 216, 255]]);
-      }
+      if (mood) document.documentElement.setAttribute('data-weather', mood);
+      else document.documentElement.removeAttribute('data-weather');
+      updateAmbientPalette();
+    }
+    // Single source of truth for what the swaying canvas background should look like right now:
+    // real weather wins when it's on and has data, otherwise the time-of-day mood if adaptive
+    // theme is on, otherwise a fixed default. Called whenever either signal changes.
+    function updateAmbientPalette() {
+      const weatherMood = state.weatherEnabled ? state.weather?.mood : null;
+      if (weatherMood) { setGradientPalette(WEATHER_PALETTES[weatherMood]); return; }
+      if (state.adaptiveTheme) { setGradientPalette(TIME_OF_DAY_PALETTES[skyMoodFor()]); return; }
+      setGradientPalette(TIME_OF_DAY_PALETTES.day);
     }
     // Open-Meteo: free, no API key, no account — a deliberate choice so this stays a
     // dependency-free static file. Like the Supabase calls, this needs a host without the
@@ -764,7 +785,7 @@
     // tab is hidden, and lives outside #app so render()'s innerHTML swap never touches it.
     // Mutable so weather/time-of-day mood can retint the animated background without tearing
     // down and rebuilding the canvas/WebGL-ish loop. draw() below reads this fresh every frame.
-    let ambientColors = [[255, 90, 54], [167, 139, 250], [93, 216, 255]];
+    let ambientColors = [[79, 209, 197], [76, 118, 122], [91, 159, 227]];
     function setGradientPalette(colors) { ambientColors = colors; }
     function initGradientBackground() {
       const canvas = document.getElementById('shader-bg');
@@ -784,9 +805,10 @@
       resize();
       window.addEventListener('resize', resize);
       const positions = [
-        { x: 0.22, y: 0.18, r: 0.55, sx: 0.00013, sy: 0.00017, phase: 0 },
-        { x: 0.8, y: 0.75, r: 0.6, sx: 0.00016, sy: 0.00011, phase: 2.1 },
-        { x: 0.75, y: 0.15, r: 0.5, sx: 0.0001, sy: 0.00019, phase: 4.2 },
+        { x: 0.2, y: 0.2, r: 0.6, sx: 0.00009, sy: 0.00012, phase: 0, sway: 0.22 },
+        { x: 0.82, y: 0.78, r: 0.65, sx: 0.00011, sy: 0.00008, phase: 2.4, sway: 0.24 },
+        { x: 0.78, y: 0.18, r: 0.55, sx: 0.00007, sy: 0.00013, phase: 4.6, sway: 0.2 },
+        { x: 0.15, y: 0.7, r: 0.5, sx: 0.00012, sy: 0.00007, phase: 1.3, sway: 0.18 },
       ];
       let running = true;
       document.addEventListener('visibilitychange', () => {
@@ -798,9 +820,9 @@
         ctx.clearRect(0, 0, width, height);
         ctx.globalCompositeOperation = 'lighter';
         positions.forEach((b, i) => {
-          const rgb = ambientColors[i] || ambientColors[0];
-          const cx = (b.x + Math.sin(t * b.sx + b.phase) * 0.16) * width;
-          const cy = (b.y + Math.cos(t * b.sy + b.phase) * 0.16) * height;
+          const rgb = ambientColors[i % ambientColors.length];
+          const cx = (b.x + Math.sin(t * b.sx + b.phase) * b.sway) * width;
+          const cy = (b.y + Math.cos(t * b.sy + b.phase) * b.sway) * height;
           const radius = Math.max(width, height) * b.r;
           const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
           gradient.addColorStop(0, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},.55)`);
@@ -1429,7 +1451,7 @@
       return `<section class="screen"><div class="scroll"><div class="exercise-detail-top"><button class="back-btn" data-action="close-exercise-detail" aria-label="Back">${ic('caret-left')}</button><div><h2>Exercise detail</h2><p>Fake data preview · swap for your logged history later</p></div><span class="tag">${state.exerciseRange}</span></div>
         <div class="exercise-hero"><img class="exercise-art" src="${iconFor(profile.exercise.category)}" alt=""><div class="exercise-hero-copy"><h1>${profile.exercise.name}</h1><p>${profile.exercise.muscle} · ${profile.exercise.equipment} · ${profile.exercise.tracking}</p></div></div>
         <div class="metric-grid"><div class="metric-box"><span>Latest</span><strong>${statValue(profile.latest)}</strong></div><div class="metric-box"><span>Best</span><strong>${statValue(profile.best)}</strong></div><div class="metric-box"><span>Change</span><strong style="color:var(--mint)">${statValue(profile.change)}</strong></div></div>
-        ${card(`<div class="graph-head"><div><h3>${metricCopy[0]}</h3><p>${metricCopy[1]} · normalized so the direction is easy to read.</p></div><span class="tag">${state.exerciseRange}</span></div><div class="graph-wrap"><svg class="exercise-graph" viewBox="0 0 360 170" role="img" aria-label="${profile.exercise.name} ${state.exerciseMetric.toLowerCase()} graph"><defs><linearGradient id="graphFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#ff5a36" stop-opacity=".28"></stop><stop offset="1" stop-color="#ff5a36" stop-opacity="0"></stop></linearGradient></defs><line class="gridline" x1="24" x2="336" y1="28" y2="28"></line><line class="gridline" x1="24" x2="336" y1="84" y2="84"></line><line class="gridline" x1="24" x2="336" y1="140" y2="140"></line><polygon class="area" points="${graphArea(points)}"></polygon><polyline class="trend" points="${points}"></polyline>${points.split(' ').map(pair => { const [x, y] = pair.split(','); return `<circle class="point" cx="${x}" cy="${y}" r="3.5"></circle>`; }).join('')}<text class="axis-label" x="3" y="32">high</text><text class="axis-label" x="3" y="144">low</text></svg><div class="graph-legend">${graphLabels}</div></div><div class="graph-controls"><div class="metric-switch" role="group" aria-label="Exercise metric">${['Strength', 'Volume', 'Intensity'].map(option => `<button class="metric-option ${state.exerciseMetric === option ? 'active' : ''}" data-action="exercise-metric" data-metric="${option}">${option}</button>`).join('')}</div><div class="range-mini" role="group" aria-label="Exercise graph range">${ranges.map(option => `<button class="${state.exerciseRange === option ? 'active' : ''}" data-action="exercise-range" data-range="${option}">${option}</button>`).join('')}</div></div><div class="graph-insight"><b>${profile.change}</b><span>${profile.insight}</span></div>`, 'graph-card')}
+        ${card(`<div class="graph-head"><div><h3>${metricCopy[0]}</h3><p>${metricCopy[1]} · normalized so the direction is easy to read.</p></div><span class="tag">${state.exerciseRange}</span></div><div class="graph-wrap"><svg class="exercise-graph" viewBox="0 0 360 170" role="img" aria-label="${profile.exercise.name} ${state.exerciseMetric.toLowerCase()} graph"><defs><linearGradient id="graphFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#4fd1c5" stop-opacity=".28"></stop><stop offset="1" stop-color="#4fd1c5" stop-opacity="0"></stop></linearGradient></defs><line class="gridline" x1="24" x2="336" y1="28" y2="28"></line><line class="gridline" x1="24" x2="336" y1="84" y2="84"></line><line class="gridline" x1="24" x2="336" y1="140" y2="140"></line><polygon class="area" points="${graphArea(points)}"></polygon><polyline class="trend" points="${points}"></polyline>${points.split(' ').map(pair => { const [x, y] = pair.split(','); return `<circle class="point" cx="${x}" cy="${y}" r="3.5"></circle>`; }).join('')}<text class="axis-label" x="3" y="32">high</text><text class="axis-label" x="3" y="144">low</text></svg><div class="graph-legend">${graphLabels}</div></div><div class="graph-controls"><div class="metric-switch" role="group" aria-label="Exercise metric">${['Strength', 'Volume', 'Intensity'].map(option => `<button class="metric-option ${state.exerciseMetric === option ? 'active' : ''}" data-action="exercise-metric" data-metric="${option}">${option}</button>`).join('')}</div><div class="range-mini" role="group" aria-label="Exercise graph range">${ranges.map(option => `<button class="${state.exerciseRange === option ? 'active' : ''}" data-action="exercise-range" data-range="${option}">${option}</button>`).join('')}</div></div><div class="graph-insight"><b>${profile.change}</b><span>${profile.insight}</span></div>`, 'graph-card')}
         <button class="outline" style="margin-top:12px" data-action="toast" data-message="Exercise notes will attach to your real history">${ic('plus', 'ic-sm')} Add exercise note</button>
       </div></section>`;
     }
