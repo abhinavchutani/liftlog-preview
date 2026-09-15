@@ -650,7 +650,6 @@
       pickerQuery: '',
       libraryCategory: 'All',
       history: JSON.parse(localStorage.getItem('liftlog_history') || 'null') || seedHistory,
-      adaptiveTheme: localStorage.getItem('liftlog_adaptive_theme') !== '0',
       // Real Supabase connectivity: a signed-in session, this browser's anonymous owner key
       // (satisfies the not-null owner_key column even though writes are auth-owned once signed
       // in), and the fetched real workouts (null = not loaded yet, [] = loaded and empty).
@@ -664,7 +663,9 @@
       realLoading: false,
       customExercises: JSON.parse(localStorage.getItem('liftlog_custom_exercises') || '[]'),
       radarWeekIndex: 0,
-      weatherEnabled: localStorage.getItem('liftlog_weather_enabled') === '1',
+      // Weather is a quiet, no-toggle Home-screen detail — a temp + icon shown when location is
+      // available, never something that changes the app's colors (a gym has no windows, so
+      // there's nothing to visually match anyway). See refreshWeather() below.
       weather: JSON.parse(localStorage.getItem('liftlog_weather') || 'null'),
       weatherLoading: false,
       showCustomExerciseModal: false,
@@ -683,69 +684,24 @@
     let toastTimer;
     let tickTimer;
     const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    // Time-of-day "sky mood": purely a decorative background shift (glow color + a faint tint,
-    // plus stars at night / a slow cloud drift in the evening) driven by the device clock — not
-    // real weather. Never touches text/button colors, so contrast stays constant. Settings has an
-    // on/off switch (state.adaptiveTheme, persisted).
-    function skyMoodFor(date = new Date()) {
-      const h = date.getHours();
-      if (h >= 5 && h < 11) return 'morning';
-      if (h >= 11 && h < 17) return 'day';
-      if (h >= 17 && h < 21) return 'evening';
-      return 'night';
-    }
-    // Hue-shifts the swaying ambient background through the day: bright cyan in the morning, the
-    // base teal through the day, a blue/violet transition in the evening, deep purple/dark blue
-    // at night — sampled from the same reference palette as everything else, just rotated. Real
-    // weather (below) overrides this while it's on and has data.
-    const TIME_OF_DAY_PALETTES = {
-      morning: [[79, 209, 197], [127, 227, 218], [91, 159, 227]],
-      day: [[79, 209, 197], [76, 118, 122], [91, 159, 227]],
-      evening: [[91, 140, 180], [110, 90, 170], [60, 110, 120]],
-      night: [[90, 60, 180], [50, 40, 120], [70, 90, 160]],
-    };
-    function applySkyMood() {
-      if (state.adaptiveTheme) document.documentElement.setAttribute('data-sky', skyMoodFor());
-      else document.documentElement.removeAttribute('data-sky');
-      updateAmbientPalette();
-    }
-    // Real weather (opt-in, needs location) — a step up from the time-of-day mood above: a blue
-    // clear-sky look with a sun disc on sunny days, a blurred falling-rain overlay on rainy ones,
-    // a flatter grey on cloudy ones. Wins over the time-of-day mood while it's active; falls back
-    // to it automatically at night or when weather data isn't available.
-    const WEATHER_PALETTES = {
-      sunny: [[93, 176, 255], [255, 214, 120], [176, 220, 255]],
-      cloudy: [[120, 138, 158], [86, 100, 124], [150, 165, 182]],
-      rainy: [[58, 88, 138], [38, 58, 96], [76, 106, 148]],
-    };
+    // Weather is shown as a plain temp + icon on Home, never as anything that recolors the app —
+    // there's no settings toggle for it any more. A gym has no windows, so an app that tried to
+    // visually match "what it looks like outside" would just be guessing; a small sunny/cloudy/
+    // rainy glyph next to the temperature is a fact, not a mood.
     function weatherMoodFromCode(code, isDay) {
-      if (!isDay) return null; // let the night time-of-day mood stand regardless of daytime weather
+      if (!isDay) return 'cloudy'; // no separate "night" glyph — cloudy reads fine after dark
       if (code === 0 || code === 1) return 'sunny';
       if ([2, 3, 45, 48, 71, 73, 75, 77, 85, 86].includes(code)) return 'cloudy';
       if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(code)) return 'rainy';
-      return null;
-    }
-    function applyWeatherMood() {
-      const mood = state.weatherEnabled ? state.weather?.mood : null;
-      if (mood) document.documentElement.setAttribute('data-weather', mood);
-      else document.documentElement.removeAttribute('data-weather');
-      updateAmbientPalette();
-    }
-    // Single source of truth for what the swaying canvas background should look like right now:
-    // real weather wins when it's on and has data, otherwise the time-of-day mood if adaptive
-    // theme is on, otherwise a fixed default. Called whenever either signal changes.
-    function updateAmbientPalette() {
-      const weatherMood = state.weatherEnabled ? state.weather?.mood : null;
-      if (weatherMood) { setGradientPalette(WEATHER_PALETTES[weatherMood]); return; }
-      if (state.adaptiveTheme) { setGradientPalette(TIME_OF_DAY_PALETTES[skyMoodFor()]); return; }
-      setGradientPalette(TIME_OF_DAY_PALETTES.day);
+      return 'cloudy';
     }
     // Open-Meteo: free, no API key, no account — a deliberate choice so this stays a
     // dependency-free static file. Like the Supabase calls, this needs a host without the
     // Artifact's fetch sandbox (GitHub Pages works; the published-artifact fallback won't).
+    // Runs quietly once per session (see the bottom of this script) — no toast on failure or a
+    // denied location prompt, since nothing was explicitly asked for; it just doesn't show.
     function refreshWeather() {
-      if (!state.weatherEnabled) return;
-      if (!('geolocation' in navigator)) { showToast("This browser can't share your location"); return; }
+      if (!('geolocation' in navigator)) return;
       state.weatherLoading = true;
       navigator.geolocation.getCurrentPosition(
         async position => {
@@ -762,14 +718,13 @@
             };
             localStorage.setItem('liftlog_weather', JSON.stringify(state.weather));
           } catch (error) {
-            showToast(isNetworkBlockedError(error) ? "Weather can't reach the internet from this preview link" : `Could not load weather · ${error.message}`);
+            // Silent — this is a quiet background nicety, not a user-initiated action.
           } finally {
             state.weatherLoading = false;
-            applyWeatherMood();
             render();
           }
         },
-        () => { state.weatherLoading = false; showToast('Location permission is needed for weather theming'); render(); },
+        () => { state.weatherLoading = false; },
         { timeout: 8000, maximumAge: 15 * 60 * 1000 },
       );
     }
@@ -779,8 +734,11 @@
     // app's "just open the file" design. This renders at reduced internal resolution (cheap,
     // CSS-scaled up) with requestAnimationFrame, pauses on prefers-reduced-motion and when the
     // tab is hidden, and lives outside #app so render()'s innerHTML swap never touches it.
-    // Mutable so weather/time-of-day mood can retint the animated background without tearing
-    // down and rebuilding the canvas/WebGL-ish loop. draw() below reads this fresh every frame.
+    // Mutable (rather than a constant) so a palette could retint the animated background without
+    // tearing down and rebuilding the canvas/WebGL-ish loop, if this is ever wired back up — the
+    // time-of-day/weather mood system that used to call setGradientPalette() was removed, since
+    // both it and this whole canvas are currently unused (see #shader-bg above). draw() below
+    // reads this fresh every frame.
     let ambientColors = [[79, 209, 197], [76, 118, 122], [91, 159, 227]];
     function setGradientPalette(colors) { ambientColors = colors; }
     function initGradientBackground() {
@@ -894,6 +852,32 @@
       const d = PHOSPHOR_PATHS[name];
       if (!d) return '';
       return `<svg viewBox="0 0 256 256" class="ic ${cls}" aria-hidden="true"><path d="${d}" fill="currentColor"/></svg>`;
+    }
+    // A plain sunny/cloudy/rainy glyph for the Home-screen temperature — informational only, never
+    // tied to the app's own colors (see the note above refreshWeather()).
+    function weatherIcon(mood, cls = 'ic-sm') {
+      if (mood === 'sunny') {
+        return `<svg viewBox="0 0 256 256" class="ic ${cls}" aria-hidden="true"><g fill="currentColor">
+          <circle cx="128" cy="128" r="48"/>
+          <rect x="118" y="16" width="20" height="40" rx="10" transform="rotate(0 128 128)"/>
+          <rect x="118" y="16" width="20" height="40" rx="10" transform="rotate(45 128 128)"/>
+          <rect x="118" y="16" width="20" height="40" rx="10" transform="rotate(90 128 128)"/>
+          <rect x="118" y="16" width="20" height="40" rx="10" transform="rotate(135 128 128)"/>
+          <rect x="118" y="16" width="20" height="40" rx="10" transform="rotate(180 128 128)"/>
+          <rect x="118" y="16" width="20" height="40" rx="10" transform="rotate(225 128 128)"/>
+          <rect x="118" y="16" width="20" height="40" rx="10" transform="rotate(270 128 128)"/>
+          <rect x="118" y="16" width="20" height="40" rx="10" transform="rotate(315 128 128)"/>
+        </g></svg>`;
+      }
+      if (mood === 'rainy') {
+        return `<svg viewBox="0 0 256 256" class="ic ${cls}" aria-hidden="true"><g fill="currentColor">
+          <path d="${PHOSPHOR_PATHS.cloud}"/>
+          <rect x="72" y="200" width="14" height="30" rx="7" transform="rotate(20 79 215)"/>
+          <rect x="124" y="204" width="14" height="30" rx="7" transform="rotate(20 131 219)"/>
+          <rect x="176" y="200" width="14" height="30" rx="7" transform="rotate(20 183 215)"/>
+        </g></svg>`;
+      }
+      return `<svg viewBox="0 0 256 256" class="ic ${cls}" aria-hidden="true"><path d="${PHOSPHOR_PATHS.cloud}" fill="currentColor"/></svg>`;
     }
 
     // --- Real Supabase connectivity -------------------------------------------------
@@ -1310,7 +1294,7 @@
           ? state.history.slice(0, 4).map(item => history(item, 'delete-demo-workout')).join('')
           : emptyState('dumbbell', 'No sessions yet', 'Finish a workout and it will show up here.'));
       return `<section class="screen"><div class="glow"></div><div class="scroll">
-        <div class="topline"><div class="topline-copy"><div class="eyebrow">${ic('calendar-blank', 'ic-sm')} ${new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' }).format(new Date()).toUpperCase()}${state.weatherEnabled && state.weather ? ` · ${state.weather.tempC}°C` : ''}</div><h1>Hi, ${displayName()}</h1></div>${cloudPill()}</div>
+        <div class="topline"><div class="topline-copy"><div class="eyebrow">${ic('calendar-blank', 'ic-sm')} ${new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' }).format(new Date()).toUpperCase()}${state.weather ? ` · ${weatherIcon(state.weather.mood)} ${state.weather.tempC}°C` : ''}</div><h1>Hi, ${displayName()}</h1></div>${cloudPill()}</div>
         ${card(`<div class="focus-copy"><div class="eyebrow">TODAY'S FOCUS</div><h2>Upper strength</h2><div class="focus-meta">7 exercises · about 52 min</div><button class="primary" data-action="start-routine" data-routine="upper">${ic('play', 'ic-sm')} Start Upper A</button></div><div class="week-ring"><svg viewBox="0 0 88 88"><circle class="track" cx="44" cy="44" r="38"></circle><circle class="fill" cx="44" cy="44" r="38" stroke-dasharray="${ringCirc}" stroke-dashoffset="${ringOffset}"></circle></svg><span>${ringDone}<small>of ${weeklyGoal}</small></span></div>`, 'focus-card')}
         ${modeCard()}
         ${section('Quick start', 'View all', 'data-tab="routines"')}
@@ -1390,9 +1374,6 @@
       return `<section class="screen"><div class="scroll"><div class="library-header"><button class="back-btn" data-action="close-library" aria-label="Back">${ic('caret-left')}</button><div><h2>Exercise library</h2><p class="library-count">${allExercises().length} movements · local muscle icons</p></div><span class="tag">READY</span></div><input class="library-search" id="library-search" placeholder="Search exercises, muscle, equipment" value="${state.libraryQuery}"><div class="filter-row" style="margin-top:12px">${categories.map(category => `<button class="filter ${state.libraryCategory === category ? 'active' : ''}" data-action="filter-category" data-category="${category}">${category}</button>`).join('')}</div><button class="outline" style="margin-top:12px" data-action="open-custom-exercise-modal">${ic('plus', 'ic-sm')} Add custom exercise</button><div class="library-list">${libraryItems()}</div></div></section>`;
     }
 
-    function settingToggleRow(setting, title, desc, checked) {
-      return `<div class="settings-row"><div class="settings-copy"><strong>${title}</strong><span>${desc}</span></div><button class="switch ${checked ? 'on' : ''}" data-action="toggle-setting" data-setting="${setting}" role="switch" aria-checked="${checked}" aria-label="${title}"><i></i></button></div>`;
-    }
     function settingsView() {
       return `<section class="screen"><div class="scroll"><div class="topline"><div class="topline-copy"><h1>More</h1><p class="subtle" style="margin-top:7px">Train better. A stronger you.</p></div></div>
         ${section('Profile')}
@@ -1401,9 +1382,6 @@
         ${state.session
           ? card(`<div class="settings-row"><div class="settings-copy"><strong>Signed in</strong><span>${state.session.email}</span></div><button class="outline" style="width:auto;padding:10px 14px" data-action="sign-out">Sign out</button></div>`)
           : card(`<div class="settings-row"><div class="settings-copy"><strong>Not signed in</strong><span>Sign in to sync your training across devices.</span></div><button class="mode-action" data-action="open-auth-modal">Sign in</button></div>`)}
-        ${section('Appearance')}
-        ${card(settingToggleRow('adaptive-theme', 'Adaptive daily theme', 'Shifts the background mood with the time of day — sunny mornings, clear days, moody evenings, starry nights. Purely decorative, never changes text or button colors.', state.adaptiveTheme))}
-        ${card(settingToggleRow('weather-theme', 'Real weather theme', `Uses your location to match the mood to actual weather — blue and sunny, grey and overcast, or a rainy blur.${state.weatherEnabled && state.weather ? ` Currently ${state.weather.tempC}°C, ${state.weather.mood || 'clear'}.` : state.weatherEnabled && state.weatherLoading ? ' Getting your location…' : ''}`, state.weatherEnabled))}
         ${section('Data')}
         ${card(`<div class="settings-row"><div class="settings-copy"><strong>Mode</strong><span>${state.mode === 'demo' ? 'Demo preview data' : (state.session ? `Real · synced as ${state.session.email}` : 'Real mode')}</span></div><button class="mode-action" data-action="toggle-mode">${state.mode === 'demo' ? 'Go real' : 'Go demo'}</button></div>`)}
         ${card(`<button class="outline" data-action="export-data">${ic('export', 'ic-sm')} Export your data (JSON + CSV)</button>`)}
@@ -1723,17 +1701,6 @@
         showToast(`${barLabel(state.progressRange, idx)} · ${volume.toLocaleString()} kg · ${sets} sets`);
         return;
       }
-      if (action === 'toggle-setting') {
-        const setting = target.dataset.setting;
-        if (setting === 'adaptive-theme') { state.adaptiveTheme = !state.adaptiveTheme; localStorage.setItem('liftlog_adaptive_theme', state.adaptiveTheme ? '1' : '0'); applySkyMood(); }
-        if (setting === 'weather-theme') {
-          state.weatherEnabled = !state.weatherEnabled;
-          localStorage.setItem('liftlog_weather_enabled', state.weatherEnabled ? '1' : '0');
-          if (state.weatherEnabled) refreshWeather(); else { state.weather = null; localStorage.removeItem('liftlog_weather'); applyWeatherMood(); }
-        }
-        render();
-        return;
-      }
       if (action === 'reset-history') { state.history = []; localStorage.setItem('liftlog_history', JSON.stringify(state.history)); render(); showToast('Demo history cleared'); return; }
       if (action === 'delete-demo-workout') {
         const id = target.dataset.workoutId;
@@ -1833,14 +1800,11 @@
     }, 1000);
     const confirmedJustNow = handleAuthRedirect();
     render();
-    applySkyMood();
     // initGradientBackground(); — the animated line-pattern canvas was tried and rejected in
     // favor of the plain .glow/.mesh blobs above; left un-called (rather than deleted) in case a
     // different animated background is wanted later. #shader-bg is also display:none in CSS.
-    applyWeatherMood();
-    if (state.weatherEnabled) refreshWeather();
-    setInterval(applySkyMood, 5 * 60 * 1000);
-    setInterval(() => { if (state.weatherEnabled) refreshWeather(); }, 20 * 60 * 1000);
+    refreshWeather();
+    setInterval(refreshWeather, 20 * 60 * 1000);
     if (confirmedJustNow) { showToast(`Email confirmed — signed in as ${state.session.email}`); fetchRealWorkouts().then(render); }
     else if (state.mode === 'real' && state.session) fetchRealWorkouts().then(render);
   </script>
