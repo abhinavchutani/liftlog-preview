@@ -95,15 +95,19 @@
     @keyframes sun-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .82; } }
     @keyframes rain-fall { from { background-position: 0 0; } to { background-position: -40px 90px; } }
     .topline { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; position: relative; z-index: 1; }
-    .topline-copy { flex: 1; }
-    .eyebrow { color: var(--muted); font-size: 11px; line-height: 1.2; letter-spacing: .1em; font-weight: 700; text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
+    .topline-copy { flex: 1; min-width: 0; }
+    /* min-width:0 lets this shrink instead of forcing the flex row to wrap; overflow/ellipsis means
+       a long date + weather combo truncates cleanly instead of breaking mid-word (was wrapping onto
+       two ragged lines whenever the account-email pill next to it took up much space). */
+    .eyebrow { color: var(--muted); font-size: 11px; line-height: 1.2; letter-spacing: .1em; font-weight: 700; text-transform: uppercase; display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     h1, h2, h3, p { margin: 0; }
     h1 { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 30px; letter-spacing: -.02em; line-height: 1.08; margin-top: 6px; }
     h2 { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 22px; letter-spacing: -.01em; }
     h3 { font-size: 16px; font-weight: 700; letter-spacing: -.01em; }
     .subtle { color: var(--muted); font-size: 13px; }
     .cloud-pill, .tag, .previous { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; white-space: nowrap; }
-    .cloud-pill { color: var(--text-dim); background: var(--surface-2); border: 1px solid var(--line); padding: 8px 12px 8px 10px; font-size: 11px; font-weight: 700; transition: transform .15s var(--ease-standard), border-color .15s; }
+    .cloud-pill { color: var(--text-dim); background: var(--surface-2); border: 1px solid var(--line); padding: 8px 12px 8px 10px; font-size: 11px; font-weight: 700; transition: transform .15s var(--ease-standard), border-color .15s; flex: none; }
+    .cloud-pill span { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .cloud-pill:active { transform: scale(.94); }
     .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 12px rgba(53,214,142,.6); }
     .pulse-dot { animation: pulse-dot 2.2s ease-in-out infinite; }
@@ -123,9 +127,10 @@
     .primary:active { transform: scale(.96); filter: brightness(.92); }
     .week-ring { width: 80px; height: 80px; display: grid; place-items: center; position: relative; flex: 0 0 auto; z-index: 1; }
     .week-ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
-    .week-ring svg circle { fill: none; stroke-width: 7; }
+    .week-ring svg circle { fill: none; stroke-width: 7; stroke-linecap: round; transition: stroke-dashoffset 1s var(--ease-out); }
     .week-ring svg .track { stroke: var(--surface-3); }
-    .week-ring svg .fill { stroke: var(--ember); stroke-linecap: round; transition: stroke-dashoffset 1s var(--ease-out); }
+    .week-ring svg .today { stroke: var(--muted-2); }
+    .week-ring svg .fill { stroke: var(--ember); }
     .week-ring > span { position: relative; z-index: 1; text-align: center; font-family: 'Inter', sans-serif; font-weight: 800; font-size: 21px; line-height: .9; }
     .week-ring small { display: block; font-size: 10px; font-weight: 600; color: var(--muted); margin-top: 4px; font-family: 'Inter', sans-serif; }
     .section-head { display: flex; align-items: center; gap: 10px; margin: 24px 0 12px; position: relative; z-index: 1; }
@@ -1275,8 +1280,10 @@
       return `<nav class="bottom-nav"><span class="nav-indicator" style="transform:translateX(${index * 100}%)"></span>${tabs.map(([id, iconName, label]) => `<button class="nav-item ${state.tab === id ? 'active' : ''}" data-tab="${id}">${ic(iconName)}${label}</button>`).join('')}</nav>`;
     }
     function cloudPill() {
-      const label = state.mode === 'demo' ? 'Demo preview' : (state.session ? state.session.email : 'Real mode');
-      return `<button class="cloud-pill" data-action="toggle-mode"><i class="dot pulse-dot"></i> ${label}</button>`;
+      // Real-mode label is the account's email, which can easily be 25+ characters — show just the
+      // local part (before @) so this pill can never force the date/weather line above to wrap.
+      const label = state.mode === 'demo' ? 'Demo preview' : (state.session ? state.session.email.split('@')[0] : 'Real mode');
+      return `<button class="cloud-pill" data-action="toggle-mode"><i class="dot pulse-dot"></i> <span>${label}</span></button>`;
     }
     function displayName() { return state.userName || 'Athlete'; }
     function iconFor(category) { return `assets/${({ Chest: 'chest', Back: 'back', Shoulders: 'shoulders', Arms: 'arms', Legs: 'legs', Core: 'core', Cardio: 'cardio' }[category] || 'unknown')}.svg`; }
@@ -1333,10 +1340,23 @@
       const isReal = state.mode === 'real' && !!state.session;
       const realRows = state.realWorkouts || [];
       const realStats = isReal ? computeRealStats(realRows) : null;
-      const weeklyGoal = 4;
-      const ringDone = isReal ? Math.min(weeklyGoal, realStats.workoutsThisWeek) : 3;
+      // Hero ring: a 7-segment weekly ring — one arc per day, Monday to Sunday — instead of a plain
+      // "X of a made-up goal" circle. Lit segments are days you actually trained; today's segment
+      // gets its own shade even when empty, so the ring always shows exactly where you stand.
       const ringCirc = 238.8;
-      const ringOffset = (ringCirc * (1 - ringDone / weeklyGoal)).toFixed(1);
+      const todayIndex = (new Date().getDay() + 6) % 7; // 0 = Monday … 6 = Sunday
+      const monday = new Date(); monday.setHours(0, 0, 0, 0); monday.setDate(monday.getDate() - todayIndex);
+      const trainedDays = isReal
+        ? Array.from({ length: 7 }, (_, i) => realRows.some(row => Math.floor((new Date(row.started_at).setHours(0, 0, 0, 0) - monday) / 86400000) === i))
+        : [true, false, true, false, true, false, false];
+      const trainedCount = trainedDays.filter(Boolean).length;
+      const segGap = 5;
+      const segLen = ringCirc / 7 - segGap;
+      const ringSegments = trainedDays.map((trained, i) => {
+        const cls = trained ? 'fill' : i === todayIndex ? 'today' : 'track';
+        const offset = -(i * (ringCirc / 7));
+        return `<circle class="${cls}" cx="44" cy="44" r="38" stroke-dasharray="${segLen.toFixed(2)} ${(ringCirc - segLen).toFixed(2)}" stroke-dashoffset="${offset.toFixed(2)}"></circle>`;
+      }).join('');
       // Loss aversion: only fires when it's literally true — the streak shown doesn't include today
       // yet, so if today slips by unlogged it really does reset to zero tomorrow. Framing that as a
       // loss ("log today or lose it") is a stronger, honest pull than a neutral "keep it going".
@@ -1361,7 +1381,7 @@
           : emptyState('dumbbell', 'No sessions yet', 'Finish a workout and it will show up here.'));
       return `<section class="screen"><div class="glow"></div><div class="scroll">
         <div class="topline"><div class="topline-copy"><div class="eyebrow">${ic('calendar-blank', 'ic-sm')} ${new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' }).format(new Date()).toUpperCase()}${state.weather ? ` · ${weatherIcon(state.weather.mood)} ${state.weather.tempC}°C` : ''}</div><h1>Hi, ${displayName()}</h1></div>${cloudPill()}</div>
-        ${card(`<div class="focus-copy"><div class="eyebrow">TODAY'S FOCUS</div><h2>${focusRoutine.name}</h2><div class="focus-meta">${focusRoutine.count} exercises · about ${focusRoutine.duration} min</div><button class="primary" data-action="start-routine" data-routine="${focusRoutine.id}">${ic('play', 'ic-sm')} Start ${focusRoutine.name}</button></div><div class="week-ring"><svg viewBox="0 0 88 88"><circle class="track" cx="44" cy="44" r="38"></circle><circle class="fill" cx="44" cy="44" r="38" stroke-dasharray="${ringCirc}" stroke-dashoffset="${ringOffset}"></circle></svg><span>${ringDone}<small>of ${weeklyGoal}</small></span></div>`, 'focus-card')}
+        ${card(`<div class="focus-copy"><div class="eyebrow">TODAY'S FOCUS</div><h2>${focusRoutine.name}</h2><div class="focus-meta">${focusRoutine.count} exercises · about ${focusRoutine.duration} min</div><button class="primary" data-action="start-routine" data-routine="${focusRoutine.id}">${ic('play', 'ic-sm')} Start ${focusRoutine.name}</button></div><div class="week-ring"><svg viewBox="0 0 88 88">${ringSegments}</svg><span>${trainedCount}<small>of 7 days</small></span></div>`, 'focus-card')}
         ${modeCard()}
         ${section('Quick start', 'View all', 'data-tab="routines"')}
         <div class="quick-grid"><div class="card quick-card" data-action="start-empty"><div class="icon-box">${ic('plus')}</div><strong>Empty workout</strong><span>Build as you go</span></div><div class="card quick-card" data-action="start-routine" data-routine="full"><div class="icon-box mint">${ic('repeat')}</div><strong>Recent routine</strong><span>Full Body · 5 ex</span></div></div>
