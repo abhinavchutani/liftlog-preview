@@ -118,21 +118,25 @@
     /* Total-revamp hero card: flat dark surface (no animated gradient, no glow), matching the
        reference "Push" hero card — a plain rounded-rect card with an icon chip, name, meta line
        and a solid white Start pill. */
-    .focus-card { padding: 20px; background: var(--surface); color: var(--text); border: 1px solid var(--line); display: flex; gap: 14px; align-items: center; box-shadow: var(--shadow-sm); position: relative; overflow: hidden; }
+    .focus-card { padding: 20px; background: linear-gradient(150deg, var(--surface-3) 0%, var(--surface) 65%); color: var(--text); border: 1px solid var(--line); display: flex; gap: 14px; align-items: center; box-shadow: var(--shadow-sm); position: relative; overflow: hidden; }
     .focus-card .focus-copy { flex: 1; position: relative; z-index: 1; }
     .focus-card .eyebrow { color: var(--muted); }
     .focus-card h2 { margin: 7px 0 5px; font-size: 24px; color: var(--text); }
     .focus-meta { color: var(--muted); font-size: 13px; font-weight: 500; }
     .primary { border: 0; background: var(--ember); color: var(--ember-ink); border-radius: 999px; padding: 12px 18px; font-size: 13px; font-weight: 800; margin-top: 16px; display: inline-flex; align-items: center; gap: 7px; transition: transform .15s var(--ease-standard), filter .15s; box-shadow: none; }
     .primary:active { transform: scale(.96); filter: brightness(.92); }
-    .week-ring { width: 80px; height: 80px; display: grid; place-items: center; position: relative; flex: 0 0 auto; z-index: 1; }
-    .week-ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
-    .week-ring svg circle { fill: none; stroke-width: 7; stroke-linecap: round; transition: stroke-dashoffset 1s var(--ease-out); }
-    .week-ring svg .track { stroke: var(--surface-3); }
-    .week-ring svg .today { stroke: var(--muted-2); }
-    .week-ring svg .fill { stroke: var(--ember); }
-    .week-ring > span { position: relative; z-index: 1; text-align: center; font-family: 'Inter', sans-serif; font-weight: 800; font-size: 21px; line-height: .9; }
-    .week-ring small { display: block; font-size: 10px; font-weight: 600; color: var(--muted); margin-top: 4px; font-family: 'Inter', sans-serif; }
+    /* One vivid focal point against an otherwise flat/monochrome app: a bold gradient ring (the
+       app's own sky/violet/rose accents) over a near-black track, with a soft color-matched glow
+       behind it — "shades of black" for everything else, a real mix of color for the one number
+       that's meant to feel like a reward. */
+    .week-ring { width: 100px; height: 100px; display: grid; place-items: center; position: relative; flex: 0 0 auto; z-index: 1; }
+    .week-ring::before { content: ""; position: absolute; inset: -10px; border-radius: 50%; background: radial-gradient(circle, rgba(166,132,250,.35), transparent 70%); filter: blur(14px); z-index: 0; }
+    .week-ring svg { position: absolute; inset: 0; transform: rotate(-90deg); z-index: 1; }
+    .week-ring svg circle { fill: none; stroke-width: 9; stroke-linecap: round; transition: stroke-dashoffset 1s var(--ease-out); }
+    .week-ring svg .track { stroke: rgba(255,255,255,.06); }
+    .week-ring svg .fill { stroke: url(#ringGrad); filter: drop-shadow(0 0 6px rgba(166,132,250,.5)); }
+    .week-ring > span { position: relative; z-index: 1; text-align: center; font-family: 'Inter', sans-serif; font-weight: 800; font-size: 26px; line-height: .9; }
+    .week-ring small { display: block; font-size: 10px; font-weight: 600; color: var(--muted); margin-top: 5px; font-family: 'Inter', sans-serif; }
     .section-head { display: flex; align-items: center; gap: 10px; margin: 24px 0 12px; position: relative; z-index: 1; }
     .section-head h3 { flex: 1; }
     .link { color: var(--text-dim); font-size: 12px; font-weight: 700; background: none; border: 0; padding: 0; display: inline-flex; align-items: center; gap: 4px; transition: opacity .15s; }
@@ -1340,23 +1344,19 @@
       const isReal = state.mode === 'real' && !!state.session;
       const realRows = state.realWorkouts || [];
       const realStats = isReal ? computeRealStats(realRows) : null;
-      // Hero ring: a 7-segment weekly ring — one arc per day, Monday to Sunday — instead of a plain
-      // "X of a made-up goal" circle. Lit segments are days you actually trained; today's segment
-      // gets its own shade even when empty, so the ring always shows exactly where you stand.
-      const ringCirc = 238.8;
+      // Hero ring: how many of the last 7 days had a workout, drawn as one bold gradient arc (sky →
+      // violet → rose, the app's own accent colors) over a dark track — a single vivid focal point
+      // against an otherwise flat/monochrome UI, instead of the small discrete-segment ring, which
+      // read as too subtle and technical to actually feel like a reward.
+      const ringR = 41;
+      const ringCirc = 2 * Math.PI * ringR;
       const todayIndex = (new Date().getDay() + 6) % 7; // 0 = Monday … 6 = Sunday
       const monday = new Date(); monday.setHours(0, 0, 0, 0); monday.setDate(monday.getDate() - todayIndex);
       const trainedDays = isReal
         ? Array.from({ length: 7 }, (_, i) => realRows.some(row => Math.floor((new Date(row.started_at).setHours(0, 0, 0, 0) - monday) / 86400000) === i))
         : [true, false, true, false, true, false, false];
       const trainedCount = trainedDays.filter(Boolean).length;
-      const segGap = 5;
-      const segLen = ringCirc / 7 - segGap;
-      const ringSegments = trainedDays.map((trained, i) => {
-        const cls = trained ? 'fill' : i === todayIndex ? 'today' : 'track';
-        const offset = -(i * (ringCirc / 7));
-        return `<circle class="${cls}" cx="44" cy="44" r="38" stroke-dasharray="${segLen.toFixed(2)} ${(ringCirc - segLen).toFixed(2)}" stroke-dashoffset="${offset.toFixed(2)}"></circle>`;
-      }).join('');
+      const ringOffset = (ringCirc * (1 - trainedCount / 7)).toFixed(2);
       // Loss aversion: only fires when it's literally true — the streak shown doesn't include today
       // yet, so if today slips by unlogged it really does reset to zero tomorrow. Framing that as a
       // loss ("log today or lose it") is a stronger, honest pull than a neutral "keep it going".
@@ -1381,7 +1381,7 @@
           : emptyState('dumbbell', 'No sessions yet', 'Finish a workout and it will show up here.'));
       return `<section class="screen"><div class="glow"></div><div class="scroll">
         <div class="topline"><div class="topline-copy"><div class="eyebrow">${ic('calendar-blank', 'ic-sm')} ${new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' }).format(new Date()).toUpperCase()}${state.weather ? ` · ${weatherIcon(state.weather.mood)} ${state.weather.tempC}°C` : ''}</div><h1>Hi, ${displayName()}</h1></div>${cloudPill()}</div>
-        ${card(`<div class="focus-copy"><div class="eyebrow">TODAY'S FOCUS</div><h2>${focusRoutine.name}</h2><div class="focus-meta">${focusRoutine.count} exercises · about ${focusRoutine.duration} min</div><button class="primary" data-action="start-routine" data-routine="${focusRoutine.id}">${ic('play', 'ic-sm')} Start ${focusRoutine.name}</button></div><div class="week-ring"><svg viewBox="0 0 88 88">${ringSegments}</svg><span>${trainedCount}<small>of 7 days</small></span></div>`, 'focus-card')}
+        ${card(`<div class="focus-copy"><div class="eyebrow">TODAY'S FOCUS</div><h2>${focusRoutine.name}</h2><div class="focus-meta">${focusRoutine.count} exercises · about ${focusRoutine.duration} min</div><button class="primary" data-action="start-routine" data-routine="${focusRoutine.id}">${ic('play', 'ic-sm')} Start ${focusRoutine.name}</button></div><div class="week-ring"><svg viewBox="0 0 96 96"><defs><linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" style="stop-color:var(--sky)"/><stop offset="55%" style="stop-color:var(--violet)"/><stop offset="100%" style="stop-color:var(--rose)"/></linearGradient></defs><circle class="track" cx="48" cy="48" r="${ringR}"></circle><circle class="fill" cx="48" cy="48" r="${ringR}" stroke-dasharray="${ringCirc.toFixed(2)}" stroke-dashoffset="${ringOffset}"></circle></svg><span>${trainedCount}<small>of 7 days</small></span></div>`, 'focus-card')}
         ${modeCard()}
         ${section('Quick start', 'View all', 'data-tab="routines"')}
         <div class="quick-grid"><div class="card quick-card" data-action="start-empty"><div class="icon-box">${ic('plus')}</div><strong>Empty workout</strong><span>Build as you go</span></div><div class="card quick-card" data-action="start-routine" data-routine="full"><div class="icon-box mint">${ic('repeat')}</div><strong>Recent routine</strong><span>Full Body · 5 ex</span></div></div>
