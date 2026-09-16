@@ -480,6 +480,12 @@
     .onboarding-dots { display: flex; align-items: center; gap: 6px; margin-top: 15px; }
     .onboarding-dots i { width: 6px; height: 6px; border-radius: 99px; background: var(--muted-2); transition: width .3s var(--ease-standard), background .3s; }
     .onboarding-dots i.active { width: 22px; background: var(--ember); }
+    /* Goal-gradient effect: never reads 0% — landing on the first onboarding screen already counts
+       as step 1, so there's always visible, honest momentum before the user has done anything. */
+    .onboarding-progress { margin-top: 14px; }
+    .onboarding-progress-track { height: 4px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
+    .onboarding-progress-track i { display: block; height: 100%; border-radius: inherit; background: var(--ember); transition: width .5s var(--ease-out); }
+    .onboarding-progress span { display: block; margin-top: 7px; font-size: 10px; font-weight: 700; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
     .onboarding-feature { justify-content: flex-start; }
     .onboarding-tour-head { display: flex; align-items: center; gap: 12px; position: relative; z-index: 1; }
     .onboarding-mark.small { width: 38px; height: 38px; font-size: 16px; border-radius: 13px; flex: none; }
@@ -609,10 +615,24 @@
       { id: 't-bar-row', name: 'T-Bar Row', equipment: 'Barbell', muscle: 'Back', category: 'Back', tracking: 'kg × reps' },
     ];
     const starterRoutines = [
-      { id: 'upper', name: 'Upper A', description: 'Strength · 7 exercises', program: 'Push / Pull / Legs', count: 7, last: 'Yesterday', color: 'rose' },
-      { id: 'lower', name: 'Lower A', description: 'Squat focus · 6 exercises', program: 'Push / Pull / Legs', count: 6, last: '3 days ago', color: 'sky' },
-      { id: 'full', name: 'Full Body', description: 'Balanced · 5 exercises', program: 'Full Body', count: 5, last: 'Last Monday', color: 'mint' },
+      { id: 'upper', name: 'Upper A', description: 'Strength · 7 exercises', program: 'Push / Pull / Legs', count: 7, duration: 52, last: 'Yesterday', color: 'rose' },
+      { id: 'lower', name: 'Lower A', description: 'Squat focus · 6 exercises', program: 'Push / Pull / Legs', count: 6, duration: 45, last: '3 days ago', color: 'sky' },
+      { id: 'full', name: 'Full Body', description: 'Balanced · 5 exercises', program: 'Full Body', count: 5, duration: 40, last: 'Last Monday', color: 'mint' },
     ];
+    // IKEA/endowment effect: letting the user pick a training focus during onboarding — before any
+    // account exists — makes the very first screen they land on feel chosen rather than generic.
+    // The pick is cosmetic (it just points Today's Focus at a different starter routine) but the
+    // personalization itself is the point.
+    const TRAINING_GOALS = [
+      { id: 'strength', label: 'Strength', sub: 'Heavy, low reps', routine: 'upper' },
+      { id: 'muscle', label: 'Muscle', sub: 'Hypertrophy focus', routine: 'upper' },
+      { id: 'fitness', label: 'Fitness', sub: 'General health', routine: 'full' },
+      { id: 'endurance', label: 'Endurance', sub: 'Stamina & conditioning', routine: 'lower' },
+    ];
+    function focusRoutineFor(goal) {
+      const wanted = TRAINING_GOALS.find(g => g.id === goal)?.routine || 'upper';
+      return starterRoutines.find(r => r.id === wanted) || starterRoutines[0];
+    }
     const seedHistory = [
       { id: 'seed-1', name: 'Upper A', meta: 'Yesterday · 48 min', metric: '12,480 kg', pr: '+2 PRs' },
       { id: 'seed-2', name: 'Lower A', meta: 'Wed · 56 min', metric: '9,820 kg', pr: '' },
@@ -663,6 +683,9 @@
       realLoading: false,
       customExercises: JSON.parse(localStorage.getItem('liftlog_custom_exercises') || '[]'),
       radarWeekIndex: 0,
+      trainingGoal: localStorage.getItem('liftlog_goal') || 'strength',
+      showWorkoutSummary: null,
+      showDiscardConfirm: false,
       // Weather is a quiet, no-toggle Home-screen detail — a temp + icon shown when location is
       // available, never something that changes the app's colors (a gym has no windows, so
       // there's nothing to visually match anyway). See refreshWeather() below.
@@ -1208,6 +1231,41 @@
     }
     function emptyWorkout() { return { name: 'Morning workout', started: Date.now(), notes: '', exercises: [] }; }
     function elapsed() { const total = Math.max(0, Math.floor((Date.now() - (state.workout?.started || Date.now())) / 1000)); return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`; }
+    // Smart defaults: a brand-new set is never blank. Adding a set on an exercise you're already
+    // logging just repeats the last set's weight/reps (that's how a real gym session works — you
+    // rarely change load between back-to-back sets), and adding a fresh exercise mid-workout seeds
+    // a plausible starting point instead of empty inputs. Either way the task becomes "confirm or
+    // adjust" instead of "type from scratch".
+    function suggestedSet(exercise) {
+      const seed = exercise.name.length * 7 + exercise.id.length * 13;
+      const equip = exercise.equipment || '';
+      let weight;
+      if (equip === 'Bodyweight') weight = '';
+      else if (equip === 'Dumbbell') weight = String(8 + (seed % 12) * 2);
+      else if (equip === 'Barbell') weight = String(40 + (seed % 13) * 5);
+      else weight = String(20 + (seed % 11) * 5);
+      const reps = String(8 + (seed % 5));
+      return { weight, reps };
+    }
+    // Contrast/anchoring for the post-workout summary: find the volume of the last time this exact
+    // routine name was logged, so "12,480 kg" can be shown next to "+8% vs last time" instead of in
+    // isolation. Checks Supabase rows in Real mode, the local demo history otherwise.
+    function findPreviousVolume(name) {
+      if (state.mode === 'real' && state.session) {
+        const match = (state.realWorkouts || []).find(row => row.name === name);
+        return match ? Number(match.total_volume) || 0 : null;
+      }
+      const match = state.history.find(item => item.name === name);
+      if (!match) return null;
+      const parsed = parseInt(String(match.metric).replace(/[^\d]/g, ''), 10);
+      return isNaN(parsed) ? null : parsed;
+    }
+    // Goal-gradient effect: onboarding never reports 0% — arriving on the very first screen already
+    // counts as step 1 of N, so the bar and label always show real, positive progress.
+    function onboardingProgress(step, total) {
+      const pct = Math.round(((step + 1) / total) * 100);
+      return `<div class="onboarding-progress"><div class="onboarding-progress-track"><i style="width:${pct}%"></i></div><span>${pct}% set up</span></div>`;
+    }
     function timer(seconds) { return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`; }
     function card(content, cls = '') { return `<div class="card ${cls} reveal">${content}</div>`; }
     function section(title, action = '', attrs = '') { return `<div class="section-head"><h3>${title}</h3>${action ? `<button class="link" ${attrs}>${action} ${ic('caret-right', 'ic-sm')}</button>` : ''}</div>`; }
@@ -1266,9 +1324,9 @@
       if (state.onboardingStep > 0) {
         const feature = tourFeatures[state.onboardingStep - 1];
         const finalStep = state.onboardingStep === tourFeatures.length;
-        return `<section class="onboarding onboarding-feature">${meshBg()}<div class="onboarding-tour-head"><div class="onboarding-mark small"><img src="assets/logo.svg" alt="LiftLog"></div><div class="eyebrow">LIFTLOG · QUICK TOUR · STEP ${state.onboardingStep}/${tourFeatures.length}</div></div><div class="onboarding-tour-body">${onboardingDots(state.onboardingStep)}<div class="feature-card reveal"><div class="feature-top"><span class="feature-number">${feature.number}</span><span class="feature-glyph">${ic(feature.glyph, 'ic-lg')}</span></div><div><h2>${feature.title}</h2><p>${feature.copy}</p></div></div></div><div class="onboarding-panel"><p class="name-hint" style="margin:0">Built for your next session, ${displayName()}.</p><button class="primary" data-action="${finalStep ? 'finish-tour' : 'next-onboarding'}">${finalStep ? 'Start exploring' : 'Next'} ${ic('arrow-right', 'ic-sm')}</button><button class="skip-onboarding" data-action="skip-onboarding">Skip tour</button></div></section>`;
+        return `<section class="onboarding onboarding-feature">${meshBg()}<div class="onboarding-tour-head"><div class="onboarding-mark small"><img src="assets/logo.svg" alt="LiftLog"></div><div class="eyebrow">LIFTLOG · QUICK TOUR · STEP ${state.onboardingStep}/${tourFeatures.length}</div></div><div class="onboarding-tour-body">${onboardingProgress(state.onboardingStep, tourFeatures.length + 1)}${onboardingDots(state.onboardingStep)}<div class="feature-card reveal"><div class="feature-top"><span class="feature-number">${feature.number}</span><span class="feature-glyph">${ic(feature.glyph, 'ic-lg')}</span></div><div><h2>${feature.title}</h2><p>${feature.copy}</p></div></div></div><div class="onboarding-panel"><p class="name-hint" style="margin:0">Built for your next session, ${displayName()}.</p><button class="primary" data-action="${finalStep ? 'finish-tour' : 'next-onboarding'}">${finalStep ? 'Start exploring' : 'Next'} ${ic('arrow-right', 'ic-sm')}</button><button class="skip-onboarding" data-action="skip-onboarding">Skip tour</button></div></section>`;
       }
-      return `<section class="onboarding">${meshBg()}<div><div class="onboarding-mark lg"><img src="assets/logo.svg" alt="LiftLog"></div><div class="wordmark">LIFTLOG</div><div class="eyebrow" style="margin-top:14px">PERSONAL LOGBOOK</div>${onboardingDots(0)}<h1>Train with a little more <em>signal.</em></h1><p class="onboarding-copy">A calm, fast place to log the work, compare the last session, and see the trend you are building.</p></div><div class="onboarding-panel"><label class="field-label" for="name-input">What should we call you?</label><input id="name-input" autocomplete="off" placeholder="Your first name" value="${state.userName}"><p class="name-hint">This stays on your device in the preview. It will become your profile when accounts are added.</p><button class="primary" data-action="finish-onboarding">Continue ${ic('arrow-right', 'ic-sm')}</button><button class="skip-onboarding" data-action="skip-onboarding">Use Athlete for now</button></div></section>`;
+      return `<section class="onboarding">${meshBg()}<div><div class="onboarding-mark lg"><img src="assets/logo.svg" alt="LiftLog"></div><div class="wordmark">LIFTLOG</div><div class="eyebrow" style="margin-top:14px">PERSONAL LOGBOOK</div>${onboardingProgress(0, tourFeatures.length + 1)}${onboardingDots(0)}<h1>Train with a little more <em>signal.</em></h1><p class="onboarding-copy">A calm, fast place to log the work, compare the last session, and see the trend you are building.</p></div><div class="onboarding-panel"><label class="field-label" for="name-input">What should we call you?</label><input id="name-input" autocomplete="off" placeholder="Your first name" value="${state.userName}"><label class="field-label" style="margin-top:16px">Main goal</label><div class="filter-row" style="margin-top:0">${TRAINING_GOALS.map(g => `<button class="filter ${state.trainingGoal === g.id ? 'active' : ''}" data-action="pick-goal" data-goal="${g.id}">${g.label}</button>`).join('')}</div><p class="name-hint">This stays on your device in the preview. It will become your profile when accounts are added.</p><button class="primary" data-action="finish-onboarding">Continue ${ic('arrow-right', 'ic-sm')}</button><button class="skip-onboarding" data-action="skip-onboarding">Use Athlete for now</button></div></section>`;
     }
 
     function todayView() {
@@ -1279,11 +1337,19 @@
       const ringDone = isReal ? Math.min(weeklyGoal, realStats.workoutsThisWeek) : 3;
       const ringCirc = 238.8;
       const ringOffset = (ringCirc * (1 - ringDone / weeklyGoal)).toFixed(1);
+      // Loss aversion: only fires when it's literally true — the streak shown doesn't include today
+      // yet, so if today slips by unlogged it really does reset to zero tomorrow. Framing that as a
+      // loss ("log today or lose it") is a stronger, honest pull than a neutral "keep it going".
+      const loggedToday = isReal && realRows.some(row => new Date(row.started_at).toDateString() === new Date().toDateString());
       const statsMarkup = isReal
         ? stat('WORKOUTS', String(realStats.workoutsThisWeek), 'last 7 days')
           + stat('VOLUME', `${Math.round(realStats.volumeThisWeek).toLocaleString()} kg`, 'last 7 days')
-          + stat('STREAK', `${realStats.streak}d`, realStats.streak ? 'keep it going' : 'start today')
+          + stat('STREAK', `${realStats.streak}d`, realStats.streak ? (loggedToday ? 'keep it going' : 'log today or lose it') : 'start today')
         : stat('WORKOUTS', '28', '12 week sample') + stat('VOLUME', '84,320 kg', 'all lifts') + stat('STREAK', '12d', 'best this cycle');
+      // IKEA/endowment effect: the routine suggested here is whatever the user picked as their
+      // training focus during onboarding (see TRAINING_GOALS) — a free, cosmetic choice that makes
+      // this card feel pointed at them specifically rather than a generic default.
+      const focusRoutine = focusRoutineFor(state.trainingGoal);
       const sessionsMarkup = isReal
         ? (state.realLoading
           ? `<p class="subtle" style="padding:16px 0">Loading your sessions…</p>`
@@ -1295,7 +1361,7 @@
           : emptyState('dumbbell', 'No sessions yet', 'Finish a workout and it will show up here.'));
       return `<section class="screen"><div class="glow"></div><div class="scroll">
         <div class="topline"><div class="topline-copy"><div class="eyebrow">${ic('calendar-blank', 'ic-sm')} ${new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' }).format(new Date()).toUpperCase()}${state.weather ? ` · ${weatherIcon(state.weather.mood)} ${state.weather.tempC}°C` : ''}</div><h1>Hi, ${displayName()}</h1></div>${cloudPill()}</div>
-        ${card(`<div class="focus-copy"><div class="eyebrow">TODAY'S FOCUS</div><h2>Upper strength</h2><div class="focus-meta">7 exercises · about 52 min</div><button class="primary" data-action="start-routine" data-routine="upper">${ic('play', 'ic-sm')} Start Upper A</button></div><div class="week-ring"><svg viewBox="0 0 88 88"><circle class="track" cx="44" cy="44" r="38"></circle><circle class="fill" cx="44" cy="44" r="38" stroke-dasharray="${ringCirc}" stroke-dashoffset="${ringOffset}"></circle></svg><span>${ringDone}<small>of ${weeklyGoal}</small></span></div>`, 'focus-card')}
+        ${card(`<div class="focus-copy"><div class="eyebrow">TODAY'S FOCUS</div><h2>${focusRoutine.name}</h2><div class="focus-meta">${focusRoutine.count} exercises · about ${focusRoutine.duration} min</div><button class="primary" data-action="start-routine" data-routine="${focusRoutine.id}">${ic('play', 'ic-sm')} Start ${focusRoutine.name}</button></div><div class="week-ring"><svg viewBox="0 0 88 88"><circle class="track" cx="44" cy="44" r="38"></circle><circle class="fill" cx="44" cy="44" r="38" stroke-dasharray="${ringCirc}" stroke-dashoffset="${ringOffset}"></circle></svg><span>${ringDone}<small>of ${weeklyGoal}</small></span></div>`, 'focus-card')}
         ${modeCard()}
         ${section('Quick start', 'View all', 'data-tab="routines"')}
         <div class="quick-grid"><div class="card quick-card" data-action="start-empty"><div class="icon-box">${ic('plus')}</div><strong>Empty workout</strong><span>Build as you go</span></div><div class="card quick-card" data-action="start-routine" data-routine="full"><div class="icon-box mint">${ic('repeat')}</div><strong>Recent routine</strong><span>Full Body · 5 ex</span></div></div>
@@ -1375,13 +1441,19 @@
     }
 
     function settingsView() {
+      // Reciprocity: lead the sign-in ask with the value already sitting in Demo mode, instead of a
+      // cold "sign in to sync" — the user already has something real to protect, so say so.
+      const demoVolume = state.history.reduce((sum, item) => sum + (parseInt(String(item.metric).replace(/[^\d]/g, ''), 10) || 0), 0);
+      const notSignedInCopy = state.mode === 'demo' && state.history.length
+        ? `You've logged ${state.history.length} session${state.history.length === 1 ? '' : 's'} and ${demoVolume.toLocaleString()} kg in Demo mode. Sign in once to keep it forever, synced across devices.`
+        : 'Sign in to sync your training across devices.';
       return `<section class="screen"><div class="scroll"><div class="topline"><div class="topline-copy"><h1>More</h1><p class="subtle" style="margin-top:7px">Train better. A stronger you.</p></div></div>
         ${section('Profile')}
         ${card(`<div class="settings-row"><div class="settings-copy"><strong>Name</strong><span>Shown across the app</span></div><input class="settings-input" id="settings-name" value="${state.userName}" placeholder="Your first name"></div>`)}
         ${section('Account')}
         ${state.session
           ? card(`<div class="settings-row"><div class="settings-copy"><strong>Signed in</strong><span>${state.session.email}</span></div><button class="outline" style="width:auto;padding:10px 14px" data-action="sign-out">Sign out</button></div>`)
-          : card(`<div class="settings-row"><div class="settings-copy"><strong>Not signed in</strong><span>Sign in to sync your training across devices.</span></div><button class="mode-action" data-action="open-auth-modal">Sign in</button></div>`)}
+          : card(`<div class="settings-row"><div class="settings-copy"><strong>Not signed in</strong><span>${notSignedInCopy}</span></div><button class="mode-action" data-action="open-auth-modal">Sign in</button></div>`)}
         ${section('Data')}
         ${card(`<div class="settings-row"><div class="settings-copy"><strong>Mode</strong><span>${state.mode === 'demo' ? 'Demo preview data' : (state.session ? `Real · synced as ${state.session.email}` : 'Real mode')}</span></div><button class="mode-action" data-action="toggle-mode">${state.mode === 'demo' ? 'Go real' : 'Go demo'}</button></div>`)}
         ${card(`<button class="outline" data-action="export-data">${ic('export', 'ic-sm')} Export your data (JSON + CSV)</button>`)}
@@ -1521,6 +1593,42 @@
         <button class="skip-onboarding" data-action="toggle-auth-mode">${isSignUp ? 'Already have an account? Sign in' : 'New here? Create an account'}</button>
       </div></div>`;
     }
+    // Loss aversion: named instead of a generic "are you sure?" — the count of sets actually on the
+    // line is the whole point, so closing feels like a real decision, not a formality.
+    function discardConfirmModalView() {
+      const w = state.workout;
+      const completedSets = w.exercises.reduce((sum, ex) => sum + ex.sets.filter(s => s.completed).length, 0);
+      const loggedSets = w.exercises.reduce((sum, ex) => sum + ex.sets.filter(s => s.weight || s.reps).length, 0);
+      const count = completedSets || loggedSets;
+      return `<div class="modal-backdrop" data-action="cancel-discard-workout"><div class="modal" data-action="noop" style="text-align:center;padding-top:26px">
+        <div class="icon-box" style="margin:0 auto 14px;background:rgba(255,92,92,.14);color:var(--danger)">${ic('warning-circle', 'ic-lg')}</div>
+        <h3 style="font-size:18px">Discard this workout?</h3>
+        <p class="subtle" style="margin-top:8px">You'll lose ${count} logged set${count === 1 ? '' : 's'} from ${w.name} — this can't be undone.</p>
+        <button class="primary" style="width:100%;justify-content:center;margin-top:20px;background:var(--danger);color:#fff" data-action="confirm-discard-workout">Discard workout</button>
+        <button class="skip-onboarding" data-action="cancel-discard-workout">Keep going</button>
+      </div></div>`;
+    }
+    // Contrast/anchoring: the finish reward is never a bare number — it's shown right next to the
+    // last time this same routine was logged, so "12,480 kg" reads as "+8%" instead of in isolation.
+    function workoutSummaryModalView() {
+      const s = state.showWorkoutSummary;
+      const volume = Math.round(s.volume);
+      const contrastLine = s.previousVolume
+        ? (() => {
+            const deltaPct = s.previousVolume > 0 ? Math.round(((s.volume - s.previousVolume) / s.previousVolume) * 100) : 0;
+            const positive = deltaPct >= 0;
+            return `<div class="positive" style="justify-content:center;${positive ? '' : 'color:var(--danger)'}">${ic('trend-up', 'ic-sm')} ${positive ? '+' : ''}${deltaPct}% vs your last ${s.name} (${s.previousVolume.toLocaleString()} kg)</div>`;
+          })()
+        : `<p class="subtle">First time logging ${s.name} — this is your baseline.</p>`;
+      return `<div class="modal-backdrop" data-action="close-workout-summary"><div class="modal" data-action="noop" style="text-align:center;padding-top:28px">
+        <div class="icon-box mint" style="margin:0 auto 14px">${ic('check-circle', 'ic-lg')}</div>
+        <h2 style="font-size:24px">Workout complete</h2>
+        <p class="subtle" style="margin-top:4px">${s.name} · ${s.elapsedLabel} · ${s.completedSets}/${s.totalSets} sets</p>
+        <div class="chart-value" style="margin-top:18px;font-size:34px">${volume.toLocaleString()} <small>kg lifted</small></div>
+        <div style="margin-top:8px">${contrastLine}</div>
+        <button class="primary" style="width:100%;justify-content:center;margin-top:22px" data-action="close-workout-summary">Nice, done ${ic('arrow-right', 'ic-sm')}</button>
+      </div></div>`;
+    }
     function pickerOptions() {
       const query = state.pickerQuery.trim().toLowerCase();
       const rows = allExercises().filter(ex => !query || `${ex.name} ${ex.muscle} ${ex.equipment}`.toLowerCase().includes(query));
@@ -1582,7 +1690,7 @@
       const doRender = () => {
         const root = document.querySelector('#app');
         const view = state.onboarding ? onboardingView() : state.screen === 'library' ? libraryView() : state.screen === 'history' ? historyView() : state.screen === 'exercise-detail' ? exerciseDetailView() : state.workout ? workoutView() : state.tab === 'today' ? todayView() : state.tab === 'routines' ? routinesView() : state.tab === 'settings' ? settingsView() : progressView();
-        root.innerHTML = view + (state.showAuthModal ? authModalView() : '') + (state.showCustomExerciseModal ? customExerciseModalView() : '');
+        root.innerHTML = view + (state.showAuthModal ? authModalView() : '') + (state.showCustomExerciseModal ? customExerciseModalView() : '') + (state.showDiscardConfirm ? discardConfirmModalView() : '') + (state.showWorkoutSummary ? workoutSummaryModalView() : '');
         requestAnimationFrame(enhanceMotion);
       };
       if (document.startViewTransition && !prefersReducedMotion()) {
@@ -1612,6 +1720,7 @@
       if (action === 'next-onboarding') { state.onboardingStep = Math.min(tourFeatures.length, state.onboardingStep + 1); render(); return; }
       if (action === 'finish-tour') { state.onboarding = false; localStorage.setItem('liftlog_name', state.userName || 'Athlete'); localStorage.setItem('liftlog_onboarded', '1'); render(); showToast(`Welcome, ${displayName()}`); return; }
       if (action === 'skip-onboarding') { state.userName = 'Athlete'; state.onboarding = false; localStorage.setItem('liftlog_name', state.userName); localStorage.setItem('liftlog_onboarded', '1'); render(); return; }
+      if (action === 'pick-goal') { state.trainingGoal = target.dataset.goal; localStorage.setItem('liftlog_goal', state.trainingGoal); render(); return; }
       if (action === 'toggle-mode') {
         if (state.mode === 'demo') {
           if (state.session) {
@@ -1744,31 +1853,52 @@
       if (action === 'add-sample') { state.history.unshift({ name: 'Demo check-in', meta: 'Just now · 42 min', metric: '9,240 kg', pr: '+1 PR' }); localStorage.setItem('liftlog_history', JSON.stringify(state.history)); render(); showToast('Sample session added to your timeline'); return; }
       if (action === 'start-routine') { const r = starterRoutines.find(x => x.id === target.dataset.routine); state.workout = starterWorkout(r?.name || 'Upper A'); state.rest = 0; state.showNotes = false; render(); }
       if (action === 'start-empty') { state.workout = emptyWorkout(); state.rest = 0; render(); }
-      if (action === 'close-workout') { state.workout = null; render(); }
+      if (action === 'close-workout') {
+        // Loss aversion: leaving is silent when there's nothing to lose, but the moment real sets
+        // are on the line we name exactly what closing throws away instead of a generic "sure?".
+        const hasProgress = state.workout.exercises.some(ex => ex.sets.some(s => s.completed || s.weight || s.reps));
+        if (hasProgress) { state.showDiscardConfirm = true; render(); return; }
+        state.workout = null;
+        render();
+      }
+      if (action === 'confirm-discard-workout') { state.workout = null; state.showDiscardConfirm = false; render(); return; }
+      if (action === 'cancel-discard-workout') { state.showDiscardConfirm = false; render(); return; }
       if (action === 'finish-workout') {
         const workout = state.workout;
         const volume = workout.exercises.reduce((sum, ex) => sum + ex.sets.reduce((subtotal, set) => subtotal + (set.completed ? (Number(set.weight) || 0) * (Number(set.reps) || 0) : 0), 0), 0);
+        const completedSets = workout.exercises.reduce((sum, ex) => sum + ex.sets.filter(s => s.completed).length, 0);
+        const totalSets = workout.exercises.reduce((sum, ex) => sum + ex.sets.length, 0);
         const elapsedLabel = elapsed();
+        const previousVolume = findPreviousVolume(workout.name);
         state.workout = null; state.tab = 'today';
+        state.showWorkoutSummary = { name: workout.name, volume, completedSets, totalSets, elapsedLabel, previousVolume };
         if (state.mode === 'real' && state.session) {
           render();
-          showToast('Saving to Supabase…');
-          saveRealWorkout(workout, volume).then(() => {
-            showToast('Workout saved to Supabase');
-            return fetchRealWorkouts();
-          }).then(render).catch(error => showToast(`Cloud save failed · ${error.message}`));
+          saveRealWorkout(workout, volume).then(() => fetchRealWorkouts()).then(render).catch(error => showToast(`Cloud save failed · ${error.message}`));
         } else {
           state.history.unshift({ name: workout.name, meta: `Just now · ${elapsedLabel}`, metric: `${Math.round(volume).toLocaleString()} kg`, pr: '' });
           localStorage.setItem('liftlog_history', JSON.stringify(state.history));
           render();
-          showToast('Workout logged · sign in (Real mode) to sync it to Supabase');
         }
       }
+      if (action === 'close-workout-summary') { state.showWorkoutSummary = null; render(); return; }
       if (action === 'open-picker') { state.showPicker = true; state.pickerQuery = ''; render(); }
       if (action === 'close-picker') { state.showPicker = false; render(); }
-      if (action === 'add-exercise') { const ex = allExercises().find(x => x.id === target.dataset.exerciseId); state.workout.exercises.push({ ...ex, previous: 'No history yet', note: '', superset: '', sets: [{ weight: '', reps: '', rpe: '', completed: false, type: 'Regular' }] }); state.showPicker = false; render(); }
+      if (action === 'add-exercise') {
+        const ex = allExercises().find(x => x.id === target.dataset.exerciseId);
+        const suggestion = suggestedSet(ex);
+        const previousLabel = suggestion.weight ? `${suggestion.weight} kg × ${suggestion.reps}` : `${suggestion.reps} reps`;
+        state.workout.exercises.push({ ...ex, previous: previousLabel, note: '', superset: '', sets: [{ weight: suggestion.weight, reps: suggestion.reps, rpe: '', completed: false, type: 'Regular' }] });
+        state.showPicker = false;
+        render();
+      }
       if (action === 'remove-exercise') { state.workout.exercises.splice(Number(target.dataset.index), 1); render(); }
-      if (action === 'add-set') { state.workout.exercises[Number(target.dataset.index)].sets.push({ weight: '', reps: '', rpe: '', completed: false, type: 'Regular' }); render(); }
+      if (action === 'add-set') {
+        const ex = state.workout.exercises[Number(target.dataset.index)];
+        const last = ex.sets[ex.sets.length - 1];
+        ex.sets.push({ weight: last ? last.weight : '', reps: last ? last.reps : '', rpe: '', completed: false, type: 'Regular' });
+        render();
+      }
       if (action === 'complete-set') {
         const set = selectedSet(Number(target.dataset.exercise), Number(target.dataset.set));
         set.completed = !set.completed;
