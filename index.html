@@ -1177,6 +1177,16 @@
       date.setDate(date.getDate() - day);
       return date.toISOString().slice(0, 10);
     }
+    // Real, weekly-bucketed total volume — powers the "Volume trend" bar chart in real-mode
+    // Progress, the same section the demo screen has always had but real mode was missing. Reuses
+    // the same Monday-anchored weekKey() as the muscle-focus radar so both agree on week
+    // boundaries. Returns oldest-to-newest [weekKey, volume] pairs, capped to the last 8 weeks that
+    // actually have a session (an empty week between sessions isn't worth a bar).
+    function realVolumeTrend(rows) {
+      const weeks = {};
+      rows.forEach(row => { const key = weekKey(row.started_at); weeks[key] = (weeks[key] || 0) + (Number(row.total_volume) || 0); });
+      return Object.entries(weeks).sort((a, b) => (a[0] < b[0] ? -1 : 1)).slice(-8);
+    }
     function groupWeeklyMuscleBreakdown(rows) {
       const weeks = {};
       rows.forEach(row => {
@@ -1551,24 +1561,48 @@
       if (range === '1 year') return `Month ${index + 1}`;
       return `Period ${index + 1}`;
     }
+    // Category colors reused for the real "Working sets by muscle" bars — same hues the app
+    // already uses elsewhere (routine accents, icon chips), just mapped onto RADAR_AXES.
+    const CATEGORY_BAR_COLOR = { Chest: 'var(--mint)', Back: 'var(--sky)', Shoulders: 'var(--violet)', Arms: 'var(--rose)', Legs: 'var(--amber)', Core: 'var(--muted-2)' };
     function realProgressView() {
-      const rows = state.realWorkouts || [];
+      const allRows = state.realWorkouts || [];
       const header = `<div class="topline"><div class="topline-copy"><h1>Progress</h1><p class="subtle" style="margin-top:7px">Your real training, in context.</p></div></div>`;
       if (state.realLoading) {
         return `<section class="screen"><div class="glow"></div><div class="scroll">${header}<p class="subtle" style="padding:16px 0">Loading your progress…</p></div>${nav()}</section>`;
       }
-      if (!rows.length) {
+      if (!allRows.length) {
         return `<section class="screen"><div class="glow"></div><div class="scroll">${header}
           ${emptyState('trending-up', 'No progress yet', 'Log and finish a workout to start building your training history. Charts and per-exercise trends will appear here once you have a few sessions.')}
           <button class="primary" style="margin-top:14px;width:100%;justify-content:center" data-tab="today">${ic('play', 'ic-sm')} Start a workout</button>
         </div>${nav()}</section>`;
       }
+      // Same time-window control and progress-range action as demo mode, but filtering real rows by
+      // their actual started_at instead of swapping in canned data — "Your sessions" below stays
+      // unfiltered on purpose, so the range picker never hides a session you'd want to manage.
+      const rangeOptions = ['4 weeks', '12 weeks', '1 year', 'All time'];
+      const rangeDays = { '4 weeks': 28, '12 weeks': 84, '1 year': 365, 'All time': Infinity };
+      const cutoff = Date.now() - rangeDays[state.progressRange] * 86400000;
+      const rows = state.progressRange === 'All time' ? allRows : allRows.filter(row => new Date(row.started_at).getTime() >= cutoff);
       const totalVolume = rows.reduce((sum, row) => sum + (Number(row.total_volume) || 0), 0);
+      const trainingDays = new Set(rows.map(row => new Date(row.started_at).toDateString())).size;
+      const trend = realVolumeTrend(rows);
+      const trendMax = Math.max(1, ...trend.map(([, v]) => v));
+      const latestVolume = trend.length ? trend[trend.length - 1][1] : 0;
+      const previousVolume = trend.length > 1 ? trend[trend.length - 2][1] : null;
+      const deltaPct = previousVolume ? Math.round(((latestVolume - previousVolume) / previousVolume) * 100) : null;
+      const muscleTotals = RADAR_AXES
+        .map(category => [category, rows.reduce((sum, row) => sum + (Number(row.muscle_breakdown?.[category]) || 0), 0)])
+        .filter(([, volume]) => volume > 0)
+        .sort((a, b) => b[1] - a[1]);
+      const maxMuscle = Math.max(1, ...muscleTotals.map(([, v]) => v));
       return `<section class="screen"><div class="glow"></div><div class="scroll">${header}
-        <div class="stat-grid progress-summary">${stat('SESSIONS LOGGED', String(rows.length), 'all time')}${stat('TOTAL VOLUME', `${Math.round(totalVolume).toLocaleString()} kg`, 'all time')}</div>
+        <div class="progress-toolbar"><span class="eyebrow">TIME WINDOW</span><div class="range-switcher" role="group" aria-label="Progress time window">${rangeOptions.map(option => `<button class="range-option ${state.progressRange === option ? 'active' : ''}" data-action="progress-range" data-range="${option}">${option.toUpperCase()}</button>`).join('')}</div></div>
+        <div class="stat-grid progress-summary" style="grid-template-columns:repeat(3,1fr)">${stat('SESSIONS', String(rows.length), 'in range')}${stat('TRAINING DAYS', String(trainingDays), 'in range')}${stat('VOLUME', `${Math.round(totalVolume).toLocaleString()} kg`, 'in range')}</div>
+        ${trend.length ? card(`<div class="chart-head"><div><h3>Volume trend</h3><div class="chart-value">${Math.round(latestVolume).toLocaleString()} <small>kg</small></div>${deltaPct !== null ? `<div class="positive" style="${deltaPct < 0 ? 'color:var(--danger)' : ''}">${ic('trend-up', 'ic-sm')} ${deltaPct >= 0 ? '+' : ''}${deltaPct}% vs previous week</div>` : ''}</div></div><div class="bars">${trend.map(([, v]) => `<i class="bar" style="height:${Math.max(8, Math.round(v / trendMax * 100))}%"></i>`).join('')}</div><div class="chart-labels"><span>${trend.length > 1 ? new Date(trend[0][0]).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'This week'}</span><span>Today</span></div>`, 'chart-card') : ''}
         ${weeklyFocusCard(rows)}
+        ${muscleTotals.length ? card(`<div class="chart-head"><h3 style="flex:1">Working sets by muscle</h3><span class="subtle" style="font-size:11px">in range</span></div>${muscleTotals.map(([name, volume]) => `<div class="muscle-row"><label>${name}</label><div class="progress-line"><i style="width:${Math.max(10, Math.round(volume / maxMuscle * 100))}%;background:${CATEGORY_BAR_COLOR[name] || 'var(--ember)'}"></i></div><b>${Math.round(volume).toLocaleString()}</b></div>`).join('')}`, 'muscle-card') : ''}
         ${section('Your sessions')}
-        ${card(rows.map(row => history(realRowToHistoryItem(row), 'delete-real-workout')).join(''))}
+        ${card(allRows.map(row => history(realRowToHistoryItem(row), 'delete-real-workout')).join(''))}
         <button class="outline" style="margin-top:12px" data-action="export-data">${ic('export', 'ic-sm')} Export your data</button>
         <p class="chart-note" style="margin-top:12px">Per-exercise strength trends arrive once individual sets sync to Supabase — that's a follow-up.</p>
       </div>${nav()}</section>`;
