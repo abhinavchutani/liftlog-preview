@@ -1116,7 +1116,7 @@
     }
     async function saveRealWorkout(workout, volume) {
       const durationSeconds = Math.max(0, Math.round((Date.now() - workout.started) / 1000));
-      await supabaseRestRequest('POST', 'workouts', {
+      const row = {
         id: crypto.randomUUID(),
         owner_key: state.ownerKey,
         user_id: state.session.userId,
@@ -1127,8 +1127,17 @@
         notes: workout.notes || '',
         status: 'completed',
         total_volume: volume,
-        muscle_breakdown: computeMuscleBreakdown(workout),
-      });
+      };
+      try {
+        // Preferred: writes muscle_breakdown too, so the muscle-focus radar and "Working sets by
+        // muscle" have something to show. If the migration hasn't been run on this project, this
+        // insert fails outright on the unknown column — meaning, before this fallback existed, the
+        // *entire workout* silently failed to save just because one optional column was missing.
+        await supabaseRestRequest('POST', 'workouts', { ...row, muscle_breakdown: computeMuscleBreakdown(workout) });
+      } catch (migrationError) {
+        await supabaseRestRequest('POST', 'workouts', row);
+        showToast("Saved, but without muscle-group detail — ask whoever set up your Supabase project to run the muscle_breakdown migration (see DATA_MODEL.md).");
+      }
     }
     // Export format is intentionally versioned (schemaVersion) — see DATA_MODEL.md for the full
     // contract and the plan for evolving it (e.g. once per-set detail syncs to Supabase too).
@@ -1313,7 +1322,7 @@
         if (!completed.length) return;
         const last = completed[completed.length - 1];
         const label = last.weight ? `${last.weight} kg × ${last.reps}` : `${last.reps} reps`;
-        state.exerciseHistory[ex.id] = { label, weight: last.weight || '', reps: last.reps || '' };
+        state.exerciseHistory[ex.id] = { label, weight: last.weight || '', reps: last.reps || '', updatedAt: Date.now() };
       });
       localStorage.setItem('liftlog_exercise_history', JSON.stringify(state.exerciseHistory));
     }
@@ -1595,12 +1604,21 @@
         .filter(([, volume]) => volume > 0)
         .sort((a, b) => b[1] - a[1]);
       const maxMuscle = Math.max(1, ...muscleTotals.map(([, v]) => v));
+      // Every row here is real, not a fabricated trend — the last actually-completed set for each
+      // exercise (see recordExerciseHistory()), newest first. No fake %-change badge, since a
+      // single last-known point isn't a trend; exerciseProfile()'s synthetic graphs are demo-only.
+      const exerciseEntries = Object.entries(state.exerciseHistory)
+        .map(([id, rec]) => [allExercises().find(ex => ex.id === id), rec])
+        .filter(([ex]) => ex)
+        .sort((a, b) => (b[1].updatedAt || 0) - (a[1].updatedAt || 0));
       return `<section class="screen"><div class="glow"></div><div class="scroll">${header}
         <div class="progress-toolbar"><span class="eyebrow">TIME WINDOW</span><div class="range-switcher" role="group" aria-label="Progress time window">${rangeOptions.map(option => `<button class="range-option ${state.progressRange === option ? 'active' : ''}" data-action="progress-range" data-range="${option}">${option.toUpperCase()}</button>`).join('')}</div></div>
         <div class="stat-grid progress-summary" style="grid-template-columns:repeat(3,1fr)">${stat('SESSIONS', String(rows.length), 'in range')}${stat('TRAINING DAYS', String(trainingDays), 'in range')}${stat('VOLUME', `${Math.round(totalVolume).toLocaleString()} kg`, 'in range')}</div>
         ${trend.length ? card(`<div class="chart-head"><div><h3>Volume trend</h3><div class="chart-value">${Math.round(latestVolume).toLocaleString()} <small>kg</small></div>${deltaPct !== null ? `<div class="positive" style="${deltaPct < 0 ? 'color:var(--danger)' : ''}">${ic('trend-up', 'ic-sm')} ${deltaPct >= 0 ? '+' : ''}${deltaPct}% vs previous week</div>` : ''}</div></div><div class="bars">${trend.map(([, v]) => `<i class="bar" style="height:${Math.max(8, Math.round(v / trendMax * 100))}%"></i>`).join('')}</div><div class="chart-labels"><span>${trend.length > 1 ? new Date(trend[0][0]).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'This week'}</span><span>Today</span></div>`, 'chart-card') : ''}
         ${weeklyFocusCard(rows)}
-        ${muscleTotals.length ? card(`<div class="chart-head"><h3 style="flex:1">Working sets by muscle</h3><span class="subtle" style="font-size:11px">in range</span></div>${muscleTotals.map(([name, volume]) => `<div class="muscle-row"><label>${name}</label><div class="progress-line"><i style="width:${Math.max(10, Math.round(volume / maxMuscle * 100))}%;background:${CATEGORY_BAR_COLOR[name] || 'var(--ember)'}"></i></div><b>${Math.round(volume).toLocaleString()}</b></div>`).join('')}`, 'muscle-card') : ''}
+        ${card(`<div class="chart-head"><h3 style="flex:1">Working sets by muscle</h3><span class="subtle" style="font-size:11px">in range</span></div>${muscleTotals.length ? muscleTotals.map(([name, volume]) => `<div class="muscle-row"><label>${name}</label><div class="progress-line"><i style="width:${Math.max(10, Math.round(volume / maxMuscle * 100))}%;background:${CATEGORY_BAR_COLOR[name] || 'var(--ember)'}"></i></div><b>${Math.round(volume).toLocaleString()}</b></div>`).join('') : `<p class="subtle" style="text-align:center;padding:16px 0">No categorized volume in this range yet. If you've logged sessions and still see this, ask whoever set up your Supabase project to run the muscle_breakdown migration (see DATA_MODEL.md) — older sessions saved before that won't have this detail either way.</p>`}`, 'muscle-card')}
+        ${exerciseEntries.length ? section('Progress by exercise') : ''}
+        ${exerciseEntries.length ? card(exerciseEntries.map(([ex, rec]) => `<button class="exercise-progress-row" data-action="exercise-detail" data-exercise-id="${ex.id}"><img class="exercise-art" src="${iconFor(ex.category)}" alt=""><span class="exercise-progress-copy"><strong>${ex.name}</strong><span>${ex.category} · ${rec.label}</span></span>${ic('caret-right', 'ic-sm')}</button>`).join('')) : ''}
         ${section('Your sessions')}
         ${card(allRows.map(row => history(realRowToHistoryItem(row), 'delete-real-workout')).join(''))}
         <button class="outline" style="margin-top:12px" data-action="export-data">${ic('export', 'ic-sm')} Export your data</button>
