@@ -710,6 +710,13 @@
       ),
       showWorkoutSummary: null,
       showDiscardConfirm: false,
+      // Crash/close recovery: the active workout is auto-saved to localStorage as you go (see
+      // persistWorkoutDraft(), called from render() and from the raw-input handler). If the app
+      // gets closed mid-workout — tab killed, phone locked and never reopened, browser crash — the
+      // in-memory state.workout is gone, but the draft survives; on the next launch it's offered
+      // back instead of just silently disappearing. Never auto-resumes on its own.
+      showResumeWorkoutPrompt: false,
+      recoveredWorkout: null,
       // Weather is a quiet, no-toggle Home-screen detail — a temp + icon shown when location is
       // available, never something that changes the app's colors (a gym has no windows, so
       // there's nothing to visually match anyway). See refreshWeather() below.
@@ -728,6 +735,13 @@
     // A stale 'real' mode with no session (e.g. from before accounts existed) would otherwise
     // show real-mode UI with nothing behind it.
     if (state.mode === 'real' && !state.session) { state.mode = 'demo'; localStorage.setItem('liftlog_mode', 'demo'); }
+    // A draft left over from a workout that never got finished (app closed, tab killed, phone died
+    // mid-set) — offered back via a prompt on the next launch rather than silently lost. Stashed
+    // here rather than straight into state.workout so nothing resumes without the user saying so.
+    try {
+      const draft = JSON.parse(localStorage.getItem('liftlog_active_workout') || 'null');
+      if (draft && Array.isArray(draft.exercises) && draft.exercises.length) { state.recoveredWorkout = draft; state.showResumeWorkoutPrompt = true; }
+    } catch (e) { localStorage.removeItem('liftlog_active_workout'); }
     let toastTimer;
     let tickTimer;
     const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1256,6 +1270,24 @@
     }
     function emptyWorkout() { return { name: 'Morning workout', started: Date.now(), notes: '', exercises: [] }; }
     function elapsed() { const total = Math.max(0, Math.floor((Date.now() - (state.workout?.started || Date.now())) / 1000)); return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`; }
+    // Auto-save: mirrors the active workout to localStorage so it survives the app actually closing
+    // (tab killed, phone died mid-set) rather than only living in memory. Called from render() (so
+    // every click-driven change is covered) and directly from the raw-input handler (so typing a
+    // weight/rep/note is too, since that path intentionally skips render() to avoid losing focus
+    // mid-keystroke). Removing the key IS how a finished/discarded workout stops being recoverable —
+    // both those paths null state.workout and then render(), which lands here and clears it.
+    function persistWorkoutDraft() {
+      if (state.workout) localStorage.setItem('liftlog_active_workout', JSON.stringify(state.workout));
+      else localStorage.removeItem('liftlog_active_workout');
+    }
+    function relativeTimeFrom(ts) {
+      const mins = Math.round((Date.now() - ts) / 60000);
+      if (mins < 1) return 'just now';
+      if (mins < 60) return `${mins} min ago`;
+      const hours = Math.round(mins / 60);
+      if (hours < 24) return `${hours}h ago`;
+      return `${Math.round(hours / 24)}d ago`;
+    }
     // Real "previous" data only — no guessing. An exercise you've genuinely never logged a
     // completed set for shows "No history yet" and blank inputs; recordExerciseHistory() (called
     // when a workout finishes) is the only thing that ever populates this, so what's shown here is
@@ -1652,6 +1684,18 @@
         <button class="skip-onboarding" data-action="cancel-discard-workout">Keep going</button>
       </div></div>`;
     }
+    // Recovery prompt for a workout that never got finished — offered back, never auto-resumed.
+    function resumeWorkoutModalView() {
+      const w = state.recoveredWorkout;
+      const loggedSets = w.exercises.reduce((sum, ex) => sum + ex.sets.filter(s => s.completed || s.weight || s.reps).length, 0);
+      return `<div class="modal-backdrop" data-action="noop"><div class="modal" data-action="noop" style="text-align:center;padding-top:26px">
+        <div class="icon-box mint" style="margin:0 auto 14px">${ic('clock', 'ic-lg')}</div>
+        <h3 style="font-size:18px">Unfinished workout found</h3>
+        <p class="subtle" style="margin-top:8px">${w.name} · ${relativeTimeFrom(w.started)} · ${w.exercises.length} exercise${w.exercises.length === 1 ? '' : 's'}${loggedSets ? `, ${loggedSets} set${loggedSets === 1 ? '' : 's'} logged` : ''}. Looks like this never got saved — did you forget to finish it?</p>
+        <button class="primary" style="width:100%;justify-content:center;margin-top:20px" data-action="resume-workout-draft">${ic('play', 'ic-sm')} Resume workout</button>
+        <button class="skip-onboarding" data-action="discard-workout-draft">Discard it</button>
+      </div></div>`;
+    }
     // Contrast/anchoring: the finish reward is never a bare number — it's shown right next to the
     // last time this same routine was logged, so "12,480 kg" reads as "+8%" instead of in isolation.
     function workoutSummaryModalView() {
@@ -1742,6 +1786,7 @@
       return [state.onboarding ? `onboarding:${state.onboardingStep}` : '', state.screen, state.tab, state.workout ? 'workout' : '', state.workoutsSubtab].join('|');
     }
     function render() {
+      persistWorkoutDraft();
       const key = currentScreenKey();
       const sameScreen = key === lastScreenKey;
       const prevScrollTop = sameScreen ? document.querySelector('.scroll, .workout-scroll')?.scrollTop : 0;
@@ -1749,7 +1794,7 @@
       const doRender = () => {
         const root = document.querySelector('#app');
         const view = state.onboarding ? onboardingView() : state.screen === 'library' ? libraryView() : state.screen === 'history' ? historyView() : state.screen === 'exercise-detail' ? exerciseDetailView() : state.workout ? workoutView() : state.tab === 'today' ? todayView() : state.tab === 'routines' ? routinesView() : state.tab === 'settings' ? settingsView() : progressView();
-        root.innerHTML = view + (state.showAuthModal ? authModalView() : '') + (state.showCustomExerciseModal ? customExerciseModalView() : '') + (state.showDiscardConfirm ? discardConfirmModalView() : '') + (state.showWorkoutSummary ? workoutSummaryModalView() : '');
+        root.innerHTML = view + (state.showAuthModal ? authModalView() : '') + (state.showCustomExerciseModal ? customExerciseModalView() : '') + (state.showDiscardConfirm ? discardConfirmModalView() : '') + (state.showWorkoutSummary ? workoutSummaryModalView() : '') + (state.showResumeWorkoutPrompt ? resumeWorkoutModalView() : '');
         if (prevScrollTop) {
           const scrollEl = document.querySelector('.scroll, .workout-scroll');
           if (scrollEl) scrollEl.scrollTop = prevScrollTop;
@@ -1926,6 +1971,8 @@
       }
       if (action === 'confirm-discard-workout') { state.workout = null; state.showDiscardConfirm = false; render(); return; }
       if (action === 'cancel-discard-workout') { state.showDiscardConfirm = false; render(); return; }
+      if (action === 'resume-workout-draft') { state.workout = state.recoveredWorkout; state.recoveredWorkout = null; state.showResumeWorkoutPrompt = false; state.rest = 0; state.tab = 'today'; render(); return; }
+      if (action === 'discard-workout-draft') { state.recoveredWorkout = null; state.showResumeWorkoutPrompt = false; localStorage.removeItem('liftlog_active_workout'); render(); return; }
       if (action === 'finish-workout') {
         const workout = state.workout;
         const volume = workout.exercises.reduce((sum, ex) => sum + ex.sets.reduce((subtotal, set) => subtotal + (set.completed ? (Number(set.weight) || 0) * (Number(set.reps) || 0) : 0), 0), 0);
@@ -1977,7 +2024,7 @@
       if (action === 'toggle-notes') { state.showNotes = !state.showNotes; render(); }
       if (action === 'toast') { showToast(target.dataset.message || 'Coming soon'); }
     });
-    document.addEventListener('input', event => { const input = event.target; if (input.id === 'name-input') { state.userName = input.value; return; } if (input.id === 'settings-name') { state.userName = input.value; localStorage.setItem('liftlog_name', state.userName || 'Athlete'); return; } if (input.id === 'auth-email') { state.authEmail = input.value; return; } if (input.id === 'auth-password') { state.authPassword = input.value; return; } if (input.id === 'library-search') { state.libraryQuery = input.value; const list = document.querySelector('.library-list'); if (list) list.innerHTML = libraryItems(); return; } if (input.id === 'picker-search') { state.pickerQuery = input.value; const list = document.querySelector('#picker-options'); if (list) list.innerHTML = pickerOptions(); return; } if (input.id === 'workout-note') { state.workout.notes = input.value; return; } if (input.dataset.field) { const set = selectedSet(Number(input.dataset.exercise), Number(input.dataset.set)); set[input.dataset.field] = input.value; } });
+    document.addEventListener('input', event => { const input = event.target; if (input.id === 'name-input') { state.userName = input.value; return; } if (input.id === 'settings-name') { state.userName = input.value; localStorage.setItem('liftlog_name', state.userName || 'Athlete'); return; } if (input.id === 'auth-email') { state.authEmail = input.value; return; } if (input.id === 'auth-password') { state.authPassword = input.value; return; } if (input.id === 'library-search') { state.libraryQuery = input.value; const list = document.querySelector('.library-list'); if (list) list.innerHTML = libraryItems(); return; } if (input.id === 'picker-search') { state.pickerQuery = input.value; const list = document.querySelector('#picker-options'); if (list) list.innerHTML = pickerOptions(); return; } if (input.id === 'workout-note') { state.workout.notes = input.value; persistWorkoutDraft(); return; } if (input.dataset.field) { const set = selectedSet(Number(input.dataset.exercise), Number(input.dataset.set)); set[input.dataset.field] = input.value; persistWorkoutDraft(); } });
     tickTimer = setInterval(() => {
       if (!state.workout) return;
       const elapsedNode = document.querySelector('.workout-title span');
