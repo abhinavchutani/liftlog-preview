@@ -280,7 +280,7 @@
     .set-header, .set-row { display: grid; grid-template-columns: 33px 1fr 1fr 38px 37px; align-items: center; gap: 5px; }
     .set-header { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .08em; margin-top: 15px; padding: 0 3px 6px; text-transform: uppercase; }
     .set-row { margin-top: 6px; transition: opacity .3s; }
-    .set-number { font-size: 12px; color: var(--text); font-weight: 800; cursor: pointer; }
+    .set-number { font-size: 12px; color: var(--text); font-weight: 800; cursor: pointer; user-select: none; -webkit-touch-callout: none; -webkit-user-select: none; }
     .set-number.special { color: var(--amber); }
     .set-row input { width: 100%; min-width: 0; height: 40px; color: var(--text); background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 0 8px; font-size: 13px; font-weight: 700; outline: none; transition: border-color .15s, box-shadow .15s; }
     .set-row input:focus { border-color: var(--ember); box-shadow: 0 0 0 3px var(--ember-soft); }
@@ -717,6 +717,9 @@
       // back instead of just silently disappearing. Never auto-resumes on its own.
       showResumeWorkoutPrompt: false,
       recoveredWorkout: null,
+      // Hold a set's number (or right-click on desktop) to remove it — see the long-press wiring
+      // near the click listener below, and deleteSetModalView().
+      pendingDeleteSet: null,
       // Weather is a quiet, no-toggle Home-screen detail — a temp + icon shown when location is
       // available, never something that changes the app's colors (a gym has no windows, so
       // there's nothing to visually match anyway). See refreshWeather() below.
@@ -1627,7 +1630,7 @@
     }
     function setRow(set, exerciseIndex, setIndex) {
       const rpeClass = !set.rpe ? '' : set.rpe >= 9 ? 'high' : 'mid';
-      return `<div class="set-row ${set.completed ? 'done' : ''}"><span class="set-number ${set.type !== 'Regular' ? 'special' : ''}" data-action="cycle-type" data-exercise="${exerciseIndex}" data-set="${setIndex}">${set.type === 'Regular' ? setIndex + 1 : `${setIndex + 1} · ${set.type[0]}`}</span><input aria-label="Weight" inputmode="decimal" value="${set.weight}" data-exercise="${exerciseIndex}" data-set="${setIndex}" data-field="weight" ${set.completed ? 'disabled' : ''}><input aria-label="Reps" inputmode="numeric" value="${set.reps}" data-exercise="${exerciseIndex}" data-set="${setIndex}" data-field="reps" ${set.completed ? 'disabled' : ''}><span class="rpe ${rpeClass}" data-action="cycle-rpe" data-exercise="${exerciseIndex}" data-set="${setIndex}">${set.rpe || '—'}</span><button class="check ${set.completed ? 'done' : ''}" data-action="complete-set" data-exercise="${exerciseIndex}" data-set="${setIndex}" aria-label="${set.completed ? 'Mark set incomplete' : 'Mark set complete'}">${set.completed ? ic('check', 'ic-sm') : ''}</button></div>`;
+      return `<div class="set-row ${set.completed ? 'done' : ''}"><span class="set-number ${set.type !== 'Regular' ? 'special' : ''}" data-action="cycle-type" data-longpress="delete-set" data-exercise="${exerciseIndex}" data-set="${setIndex}" title="Tap to change set type, hold to remove">${set.type === 'Regular' ? setIndex + 1 : `${setIndex + 1} · ${set.type[0]}`}</span><input aria-label="Weight" inputmode="decimal" value="${set.weight}" data-exercise="${exerciseIndex}" data-set="${setIndex}" data-field="weight" ${set.completed ? 'disabled' : ''}><input aria-label="Reps" inputmode="numeric" value="${set.reps}" data-exercise="${exerciseIndex}" data-set="${setIndex}" data-field="reps" ${set.completed ? 'disabled' : ''}><span class="rpe ${rpeClass}" data-action="cycle-rpe" data-exercise="${exerciseIndex}" data-set="${setIndex}">${set.rpe || '—'}</span><button class="check ${set.completed ? 'done' : ''}" data-action="complete-set" data-exercise="${exerciseIndex}" data-set="${setIndex}" aria-label="${set.completed ? 'Mark set incomplete' : 'Mark set complete'}">${set.completed ? ic('check', 'ic-sm') : ''}</button></div>`;
     }
     // Granular categories for the library, filters, and the custom-exercise picker — Arms is split
     // into Biceps/Triceps/Forearms here. For chart/report purposes (radar chart, muscle_breakdown)
@@ -1694,6 +1697,21 @@
         <p class="subtle" style="margin-top:8px">${w.name} · ${relativeTimeFrom(w.started)} · ${w.exercises.length} exercise${w.exercises.length === 1 ? '' : 's'}${loggedSets ? `, ${loggedSets} set${loggedSets === 1 ? '' : 's'} logged` : ''}. Looks like this never got saved — did you forget to finish it?</p>
         <button class="primary" style="width:100%;justify-content:center;margin-top:20px" data-action="resume-workout-draft">${ic('play', 'ic-sm')} Resume workout</button>
         <button class="skip-onboarding" data-action="discard-workout-draft">Discard it</button>
+      </div></div>`;
+    }
+    // Holding a set's number (see the pointerdown/pointerup wiring near the click listener) opens
+    // this instead of cycling its type — logging a set you didn't mean to shouldn't be a permanent
+    // fixture just because there's no undo for a typo.
+    function deleteSetModalView() {
+      const { exerciseIndex, setIndex } = state.pendingDeleteSet;
+      const ex = state.workout.exercises[exerciseIndex];
+      const onlyOne = ex.sets.length <= 1;
+      return `<div class="modal-backdrop" data-action="cancel-delete-set"><div class="modal" data-action="noop" style="text-align:center;padding-top:26px">
+        <div class="icon-box" style="margin:0 auto 14px;background:rgba(255,92,92,.14);color:var(--danger)">${ic('trash', 'ic-lg')}</div>
+        <h3 style="font-size:18px">Remove Set ${setIndex + 1}?</h3>
+        <p class="subtle" style="margin-top:8px">${onlyOne ? `This is the only set on ${ex.name} — removing it removes the exercise too.` : `This removes it from ${ex.name} for this workout.`}</p>
+        <button class="primary" style="width:100%;justify-content:center;margin-top:20px;background:var(--danger);color:#fff" data-action="confirm-delete-set">Remove set</button>
+        <button class="skip-onboarding" data-action="cancel-delete-set">Cancel</button>
       </div></div>`;
     }
     // Contrast/anchoring: the finish reward is never a bare number — it's shown right next to the
@@ -1794,7 +1812,7 @@
       const doRender = () => {
         const root = document.querySelector('#app');
         const view = state.onboarding ? onboardingView() : state.screen === 'library' ? libraryView() : state.screen === 'history' ? historyView() : state.screen === 'exercise-detail' ? exerciseDetailView() : state.workout ? workoutView() : state.tab === 'today' ? todayView() : state.tab === 'routines' ? routinesView() : state.tab === 'settings' ? settingsView() : progressView();
-        root.innerHTML = view + (state.showAuthModal ? authModalView() : '') + (state.showCustomExerciseModal ? customExerciseModalView() : '') + (state.showDiscardConfirm ? discardConfirmModalView() : '') + (state.showWorkoutSummary ? workoutSummaryModalView() : '') + (state.showResumeWorkoutPrompt ? resumeWorkoutModalView() : '');
+        root.innerHTML = view + (state.showAuthModal ? authModalView() : '') + (state.showCustomExerciseModal ? customExerciseModalView() : '') + (state.showDiscardConfirm ? discardConfirmModalView() : '') + (state.showWorkoutSummary ? workoutSummaryModalView() : '') + (state.showResumeWorkoutPrompt ? resumeWorkoutModalView() : '') + (state.pendingDeleteSet ? deleteSetModalView() : '');
         if (prevScrollTop) {
           const scrollEl = document.querySelector('.scroll, .workout-scroll');
           if (scrollEl) scrollEl.scrollTop = prevScrollTop;
@@ -1816,7 +1834,37 @@
     function cycleRpe(set) { set.rpe = set.rpe ? (set.rpe >= 10 ? '' : Number(set.rpe) + 1) : 6; }
     function cycleType(set) { const types = ['Regular', 'Warm-up', 'Drop', 'Failure']; set.type = types[(types.indexOf(set.type) + 1) % types.length]; }
 
+    // Generic long-press: hold an element carrying data-longpress for ~500ms (touch or mouse, both
+    // fire pointer events) to trigger it instead of its normal click. Used for a set's number —
+    // tap still cycles Warm-up/Drop/Failure as before; a hold opens deleteSetModalView() instead.
+    // The click listener below checks longPressFired to swallow the click that follows a short tap
+    // release. It's reset two ways: immediately by that click if one arrives, or by a setTimeout(0)
+    // regardless — most mobile browsers deliberately do NOT fire 'click' after a hold long enough
+    // to register as a long-press (that's how they tell it apart from a tap), so waiting on click
+    // alone would leave the flag stuck true and swallow the *next*, unrelated click — e.g. the
+    // "Remove set" button in the very modal this just opened.
+    let longPressTimer = null;
+    let longPressFired = false;
+    document.addEventListener('pointerdown', event => {
+      const el = event.target.closest('[data-longpress]');
+      if (!el) return;
+      clearTimeout(longPressTimer);
+      longPressTimer = setTimeout(() => {
+        longPressFired = true;
+        if (navigator.vibrate) navigator.vibrate(12);
+        if (el.dataset.longpress === 'delete-set') {
+          state.pendingDeleteSet = { exerciseIndex: Number(el.dataset.exercise), setIndex: Number(el.dataset.set) };
+          render();
+        }
+      }, 500);
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(type => document.addEventListener(type, () => {
+      clearTimeout(longPressTimer);
+      if (longPressFired) setTimeout(() => { longPressFired = false; }, 0);
+    }));
+
     document.addEventListener('click', event => {
+      if (longPressFired) { longPressFired = false; event.preventDefault(); return; }
       if (event.target.dataset?.action === 'close-picker-backdrop') { state.showPicker = false; render(); return; }
       const target = event.target.closest('[data-action], [data-tab]'); if (!target) return;
       if (target.dataset.tab) { state.screen = 'app'; state.tab = target.dataset.tab; render(); return; }
@@ -2018,6 +2066,16 @@
       }
       if (action === 'cycle-rpe') { cycleRpe(selectedSet(Number(target.dataset.exercise), Number(target.dataset.set))); render(); }
       if (action === 'cycle-type') { cycleType(selectedSet(Number(target.dataset.exercise), Number(target.dataset.set))); render(); }
+      if (action === 'confirm-delete-set') {
+        const { exerciseIndex, setIndex } = state.pendingDeleteSet;
+        const ex = state.workout.exercises[exerciseIndex];
+        ex.sets.splice(setIndex, 1);
+        if (!ex.sets.length) state.workout.exercises.splice(exerciseIndex, 1);
+        state.pendingDeleteSet = null;
+        render();
+        return;
+      }
+      if (action === 'cancel-delete-set') { state.pendingDeleteSet = null; render(); return; }
       if (action === 'rest-minus') { state.rest = Math.max(0, state.rest - 15); render(); }
       if (action === 'rest-plus') { state.rest += 15; state.restTotal = Math.max(state.restTotal, state.rest); render(); }
       if (action === 'rest-skip') { state.rest = 0; render(); }
