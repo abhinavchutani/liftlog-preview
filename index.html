@@ -695,6 +695,8 @@
         return key;
       })(),
       realWorkouts: null,
+      // Finished Real-mode workouts not yet confirmed by Supabase — see the offline-first block below.
+      pendingWorkouts: loadPendingWorkouts(),
       realLoading: false,
       customExercises: JSON.parse(localStorage.getItem('liftlog_custom_exercises') || '[]'),
       radarWeekIndex: 0,
@@ -957,7 +959,7 @@
     // it, so every request here throws the browser's generic "Failed to fetch" with no real HTTP
     // response at all. That's a platform wall, not a bad URL/key, so it gets its own clear message
     // instead of surfacing the confusing raw text.
-    const NO_NETWORK_MESSAGE = "Real mode can't reach Supabase from this preview link (the hosting sandbox blocks it) — Demo mode below still logs workouts normally on this device.";
+    const NO_NETWORK_MESSAGE = "Can't reach Supabase — check your connection. (On the Artifact preview link its sandbox blocks Supabase entirely; if this persists on the main site, the Supabase project may be paused.) Workouts you finish are kept on this device and sync later.";
     function isNetworkBlockedError(error) {
       return error instanceof TypeError && /fetch/i.test(error.message || '');
     }
@@ -973,7 +975,11 @@
         throw new Error(isNetworkBlockedError(error) ? NO_NETWORK_MESSAGE : error.message);
       }
       const json = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(json.msg || json.error_description || json.error || `HTTP ${response.status}`);
+      if (!response.ok) {
+        const failure = new Error(json.msg || json.error_description || json.error || `HTTP ${response.status}`);
+        failure.status = response.status; // lets callers tell "server said no" apart from "couldn't reach it"
+        throw failure;
+      }
       return json;
     }
     function persistSession(json) {
@@ -1046,8 +1052,12 @@
       try {
         return persistSession(await supabaseAuthRequest('token?grant_type=refresh_token', { refresh_token: state.session.refreshToken })).accessToken;
       } catch (error) {
-        signOut();
-        return null;
+        // Only an explicit rejection from the server (HTTP 400/401/403 — refresh token revoked or
+        // expired) means the session is actually dead. This used to sign you out on *any* failure,
+        // including a dropped connection or Supabase being unreachable — so one bad refresh at the
+        // gym wiped your login and left nothing able to save. A network failure keeps the session.
+        if (error.status === 400 || error.status === 401 || error.status === 403) { signOut(); return null; }
+        throw new Error("Can't reach Supabase right now — your workout is safe on this device and will sync when it's back.");
       }
     }
     async function supabaseRestRequest(method, path, body) {
@@ -1070,7 +1080,10 @@
       }
       if (!response.ok) {
         const errorJson = await response.json().catch(() => ({}));
-        throw new Error(errorJson.message || `HTTP ${response.status}`);
+        const failure = new Error(errorJson.message || `HTTP ${response.status}`);
+        failure.status = response.status;
+        failure.code = errorJson.code; // PostgREST/Postgres code, e.g. 23505 = duplicate key
+        throw failure;
       }
       return response.status === 204 ? null : response.json().catch(() => null);
     }
@@ -1089,7 +1102,15 @@
         }
         state.realWorkouts = rows || [];
         state.radarWeekIndex = 0;
+        // Cached so history/progress still show something when Supabase is unreachable later.
+        try { localStorage.setItem('liftlog_real_cache', JSON.stringify({ userId: state.session?.userId, rows: state.realWorkouts })); } catch (e) {}
       } catch (error) {
+        if (!state.realWorkouts) {
+          try {
+            const cache = JSON.parse(localStorage.getItem('liftlog_real_cache') || 'null');
+            if (cache && cache.userId === state.session?.userId) state.realWorkouts = cache.rows || [];
+          } catch (e) {}
+        }
         state.realWorkouts = state.realWorkouts || [];
         showToast(`Could not load your data · ${error.message}`);
       } finally {
@@ -1114,30 +1135,93 @@
       });
       return breakdown;
     }
-    async function saveRealWorkout(workout, volume) {
-      const durationSeconds = Math.max(0, Math.round((Date.now() - workout.started) / 1000));
-      const row = {
+    // ---- Offline-first saving -------------------------------------------------------------
+    // A finished Real-mode workout is written to a local outbox *first* (localStorage), shown in
+    // your history immediately, and only then uploaded. Before this, finishing a workout threw it
+    // away if the upload failed — a dead signal at the gym, a token refresh hiccup, or Supabase
+    // itself being down meant the whole session was simply lost. Now nothing is ever removed from
+    // the outbox until Supabase has confirmed it, and it retries on its own (on reconnect, on
+    // returning to the tab, and once a minute). Row ids are generated up front, so a retry after a
+    // lost response is idempotent: a duplicate-key reply just means it already made it.
+    function loadPendingWorkouts() {
+      try { const parsed = JSON.parse(localStorage.getItem('liftlog_pending_workouts') || '[]'); return Array.isArray(parsed) ? parsed : []; } catch (e) { return []; }
+    }
+    function savePendingWorkouts() { localStorage.setItem('liftlog_pending_workouts', JSON.stringify(state.pendingWorkouts)); }
+    function buildWorkoutRow(workout, volume) {
+      return {
         id: crypto.randomUUID(),
         owner_key: state.ownerKey,
         user_id: state.session.userId,
         routine_id: null,
         name: workout.name,
         started_at: new Date(workout.started).toISOString(),
-        duration_seconds: durationSeconds,
+        duration_seconds: Math.max(0, Math.round((Date.now() - workout.started) / 1000)),
         notes: workout.notes || '',
         status: 'completed',
         total_volume: volume,
+        muscle_breakdown: computeMuscleBreakdown(workout),
       };
+    }
+    function queueRealWorkout(workout, volume) {
+      state.pendingWorkouts.push({ row: buildWorkoutRow(workout, volume), queuedAt: Date.now() });
+      savePendingWorkouts();
+    }
+    const isDuplicateKey = error => error && (error.code === '23505' || error.status === 409);
+    async function postWorkoutRow(row) {
       try {
-        // Preferred: writes muscle_breakdown too, so the muscle-focus radar and "Working sets by
-        // muscle" have something to show. If the migration hasn't been run on this project, this
-        // insert fails outright on the unknown column — meaning, before this fallback existed, the
-        // *entire workout* silently failed to save just because one optional column was missing.
-        await supabaseRestRequest('POST', 'workouts', { ...row, muscle_breakdown: computeMuscleBreakdown(workout) });
-      } catch (migrationError) {
         await supabaseRestRequest('POST', 'workouts', row);
-        showToast("Saved, but without muscle-group detail — ask whoever set up your Supabase project to run the muscle_breakdown migration (see DATA_MODEL.md).");
+      } catch (error) {
+        if (isDuplicateKey(error)) return; // an earlier attempt actually landed
+        // The muscle_breakdown column only exists once its migration has been run. Without it the
+        // whole insert is rejected, so retry without that one optional field rather than losing the
+        // workout (same idea as the read side in fetchRealWorkouts()).
+        if (row.muscle_breakdown && error.status === 400 && /muscle_breakdown|column/i.test(error.message)) {
+          const { muscle_breakdown, ...plain } = row;
+          try { await supabaseRestRequest('POST', 'workouts', plain); } catch (retryError) { if (!isDuplicateKey(retryError)) throw retryError; }
+          showToast("Saved, but without muscle-group detail — the muscle_breakdown migration hasn't been run on your Supabase project (see DATA_MODEL.md).");
+          return;
+        }
+        throw error;
       }
+    }
+    let syncingPending = false;
+    // Returns the connectivity error if it had to stop early, otherwise undefined.
+    async function syncPendingWorkouts({ force = false } = {}) {
+      if (syncingPending || !state.session || !state.pendingWorkouts.length) return;
+      syncingPending = true;
+      let synced = 0, blocked;
+      try {
+        for (const item of [...state.pendingWorkouts]) {
+          if (item.row.user_id !== state.session.userId) continue; // belongs to another account
+          if (item.failed && !force) continue;
+          try {
+            await postWorkoutRow(item.row);
+            state.pendingWorkouts = state.pendingWorkouts.filter(p => p !== item);
+            savePendingWorkouts();
+            synced++;
+          } catch (error) {
+            // No status = couldn't reach the server; 401/408/429/5xx = try again later. Anything
+            // else is Supabase refusing this specific row — flag it, keep it, move on to the rest.
+            const transient = !error.status || error.status === 401 || error.status === 408 || error.status === 429 || error.status >= 500;
+            if (transient) { blocked = error; break; }
+            item.failed = error.message;
+            savePendingWorkouts();
+          }
+        }
+      } finally { syncingPending = false; }
+      if (synced) { await fetchRealWorkouts(); showToast(`${synced} workout${synced === 1 ? '' : 's'} synced to Supabase`); }
+      render();
+      return blocked;
+    }
+    // Synced rows plus anything still waiting in the outbox, newest first — what every Real-mode
+    // screen should read instead of state.realWorkouts directly.
+    function realRowsWithPending() {
+      const synced = state.realWorkouts || [];
+      const known = new Set(synced.map(r => r.id));
+      const pending = state.pendingWorkouts
+        .filter(p => !known.has(p.row.id) && (!state.session || p.row.user_id === state.session.userId))
+        .map(p => ({ ...p.row, _pending: true, _failed: p.failed }));
+      return [...pending, ...synced].sort((a, b) => new Date(b.started_at) - new Date(a.started_at));
     }
     // Export format is intentionally versioned (schemaVersion) — see DATA_MODEL.md for the full
     // contract and the plan for evolving it (e.g. once per-set detail syncs to Supabase too).
@@ -1156,7 +1240,7 @@
     function csvEscape(value) { const s = String(value ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }
     function exportData() {
       const isReal = state.mode === 'real' && !!state.session;
-      const sourceRows = isReal ? (state.realWorkouts || []) : state.history;
+      const sourceRows = isReal ? realRowsWithPending() : state.history;
       if (!sourceRows.length) throw new Error('Nothing to export yet');
       const workouts = isReal
         ? sourceRows.map(r => ({ id: r.id, name: r.name, startedAt: r.started_at, durationSeconds: r.duration_seconds, totalVolumeKg: Number(r.total_volume) || 0 }))
@@ -1331,7 +1415,7 @@
     // isolation. Checks Supabase rows in Real mode, the local demo history otherwise.
     function findPreviousVolume(name) {
       if (state.mode === 'real' && state.session) {
-        const match = (state.realWorkouts || []).find(row => row.name === name);
+        const match = realRowsWithPending().find(row => row.name === name);
         return match ? Number(match.total_volume) || 0 : null;
       }
       const match = state.history.find(item => item.name === name);
@@ -1363,6 +1447,17 @@
     // Biceps/Triceps/Forearms share the one "arms" icon asset — there's no dedicated art per
     // sub-category, and reusing it is better than a broken image.
     function iconFor(category) { return `assets/${({ Chest: 'chest', Back: 'back', Shoulders: 'shoulders', Biceps: 'arms', Triceps: 'arms', Forearms: 'arms', Legs: 'legs', Core: 'core', Cardio: 'cardio' }[category] || 'unknown')}.svg`; }
+    // Shown on Home whenever finished workouts are still waiting to reach Supabase, so "did it save?"
+    // always has a visible answer — and a way to retry without waiting for the automatic one.
+    function pendingSyncCard() {
+      const mine = state.session ? state.pendingWorkouts.filter(p => p.row.user_id === state.session.userId) : [];
+      if (!mine.length) return '';
+      const rejected = mine.filter(p => p.failed).length;
+      const copy = rejected
+        ? `${rejected} ${rejected === 1 ? 'was' : 'were'} rejected by Supabase (${mine.find(p => p.failed).failed}). Retry, or delete it from your sessions.`
+        : "Safe on this device. They'll upload automatically as soon as Supabase is reachable.";
+      return card(`<div class="icon-box amber">${ic('cloud')}</div><div class="mode-copy"><strong>${mine.length} workout${mine.length === 1 ? '' : 's'} not synced yet</strong><span>${copy}</span></div><button class="mode-action" data-action="sync-pending">Retry now</button>`, 'mode-card');
+    }
     function modeCard() {
       if (state.mode !== 'real' || !state.session) return '';
       return card(`<div class="icon-box mint">${ic('cloud')}</div><div class="mode-copy"><strong>Synced with Supabase</strong><span>Signed in as ${state.session.email}. Workouts you finish are saved to your account.</span></div><button class="mode-action" data-action="sign-out">Sign out</button>`, 'mode-card');
@@ -1414,7 +1509,7 @@
 
     function todayView() {
       const isReal = state.mode === 'real' && !!state.session;
-      const realRows = state.realWorkouts || [];
+      const realRows = realRowsWithPending();
       const realStats = isReal ? computeRealStats(realRows) : null;
       // Hero ring: how many of the last 7 days had a workout, drawn as one bold gradient arc (sky →
       // violet → rose, the app's own accent colors) over a dark track — a single vivid focal point
@@ -1455,6 +1550,7 @@
         <div class="topline"><div class="topline-copy"><div class="eyebrow">${ic('calendar-blank', 'ic-sm')} ${new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' }).format(new Date()).toUpperCase()}${state.weather ? ` · ${weatherIcon(state.weather.mood)} ${state.weather.tempC}°C` : ''}</div><h1>Hi, ${displayName()}</h1></div>${cloudPill()}</div>
         ${card(`<div class="focus-copy"><div class="eyebrow">TODAY'S FOCUS</div><h2>${focusRoutine.name}</h2><div class="focus-meta">${focusRoutine.count} exercises · about ${focusRoutine.duration} min</div><button class="primary" data-action="start-routine" data-routine="${focusRoutine.id}">${ic('play', 'ic-sm')} Start ${focusRoutine.name}</button></div><div class="week-ring"><svg viewBox="0 0 96 96"><defs><linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" style="stop-color:var(--sky)"/><stop offset="55%" style="stop-color:var(--violet)"/><stop offset="100%" style="stop-color:var(--rose)"/></linearGradient></defs><circle class="track" cx="48" cy="48" r="${ringR}"></circle><circle class="fill" cx="48" cy="48" r="${ringR}" stroke-dasharray="${ringCirc.toFixed(2)}" stroke-dashoffset="${ringOffset}"></circle></svg><span>${trainedCount}<small>of 7 days</small></span></div>`, 'focus-card')}
         ${modeCard()}
+        ${pendingSyncCard()}
         ${section('Quick start', 'View all', 'data-tab="routines"')}
         <div class="quick-grid"><div class="card quick-card" data-action="start-empty"><div class="icon-box">${ic('plus')}</div><strong>Empty workout</strong><span>Build as you go</span></div><div class="card quick-card" data-action="start-routine" data-routine="full"><div class="icon-box mint">${ic('repeat')}</div><strong>Recent routine</strong><span>Full Body · 5 ex</span></div></div>
         ${section('This week', 'See analytics', 'data-tab="progress"')}
@@ -1481,7 +1577,7 @@
       return `<div class="history-row"><div class="history-icon ${historyAccent(item.name)}">${ic('barbell', 'ic-sm')}</div><div class="history-copy"><strong>${item.name}</strong><span>${item.meta}</span></div><div class="history-metric"><strong>${item.metric}</strong><span class="pr">${item.pr || ''}</span></div>${deleteAction ? `<button class="history-delete" data-action="${deleteAction}" data-workout-id="${item.id}" aria-label="Delete ${item.name}">${ic('trash', 'ic-sm')}</button>` : ''}</div>`;
     }
     function realRowToHistoryItem(row) {
-      return { id: row.id, name: row.name, meta: `${formatRelativeDate(row.started_at)} · ${formatMinutes(row.duration_seconds)}`, metric: `${Math.round(row.total_volume || 0).toLocaleString()} kg`, pr: '' };
+      return { id: row.id, name: row.name, meta: `${formatRelativeDate(row.started_at)} · ${formatMinutes(row.duration_seconds)}${row._pending ? (row._failed ? ' · sync failed' : ' · not synced yet') : ''}`, metric: `${Math.round(row.total_volume || 0).toLocaleString()} kg`, pr: '' };
     }
     function historyView() {
       // Bug fixed here: this screen used to always read the local demo array, even in Real mode —
@@ -1489,7 +1585,7 @@
       // up here. It now mirrors exactly what Today/Progress already switch on.
       const isReal = state.mode === 'real' && !!state.session;
       if (isReal) {
-        const rows = state.realWorkouts || [];
+        const rows = realRowsWithPending();
         return `<section class="screen"><div class="scroll"><div class="library-header"><button class="back-btn" data-action="close-history" aria-label="Back">${ic('caret-left')}</button><div><h2>Session history</h2><p class="library-count">${state.realLoading ? 'Loading…' : `${rows.length} logged sessions`}</p></div></div>
           ${state.realLoading ? `<p class="subtle" style="padding:16px 0">Loading your sessions…</p>` : rows.length ? card(rows.map(row => history(realRowToHistoryItem(row), 'delete-real-workout')).join('')) : emptyState('dumbbell', 'No sessions yet', 'Finish a workout and it will show up here, synced to your account.')}
         </div></section>`;
@@ -1574,7 +1670,7 @@
     // already uses elsewhere (routine accents, icon chips), just mapped onto RADAR_AXES.
     const CATEGORY_BAR_COLOR = { Chest: 'var(--mint)', Back: 'var(--sky)', Shoulders: 'var(--violet)', Arms: 'var(--rose)', Legs: 'var(--amber)', Core: 'var(--muted-2)' };
     function realProgressView() {
-      const allRows = state.realWorkouts || [];
+      const allRows = realRowsWithPending();
       const header = `<div class="topline"><div class="topline-copy"><h1>Progress</h1><p class="subtle" style="margin-top:7px">Your real training, in context.</p></div></div>`;
       if (state.realLoading) {
         return `<section class="screen"><div class="glow"></div><div class="scroll">${header}<p class="subtle" style="padding:16px 0">Loading your progress…</p></div>${nav()}</section>`;
@@ -1936,7 +2032,7 @@
             localStorage.setItem('liftlog_mode', 'real');
             render();
             showToast('Real mode on · syncing your data');
-            fetchRealWorkouts().then(render);
+            fetchRealWorkouts().then(render).then(() => syncPendingWorkouts());
           } else {
             state.showAuthModal = true; state.authModalMode = 'signin'; state.authError = ''; state.authInfo = '';
             render();
@@ -1992,7 +2088,7 @@
           state.mode = 'real'; localStorage.setItem('liftlog_mode', 'real');
           render();
           showToast(`Welcome${state.session?.email ? ', ' + state.session.email : ''}`);
-          fetchRealWorkouts().then(render);
+          fetchRealWorkouts().then(render).then(() => syncPendingWorkouts());
         }).catch(error => {
           state.authLoading = false;
           if (isSignUp && /confirm/i.test(error.message)) state.authInfo = error.message;
@@ -2030,8 +2126,20 @@
         }
         return;
       }
+      if (action === 'sync-pending') {
+        showToast('Trying to sync…');
+        syncPendingWorkouts({ force: true }).then(blocked => { if (blocked) showToast("Still can't reach Supabase — your workouts are safe on this device."); });
+        return;
+      }
       if (action === 'delete-real-workout') {
         const id = target.dataset.workoutId;
+        if (state.pendingWorkouts.some(p => p.row.id === id)) {
+          if (!confirm('Delete this workout? It hasn\'t synced to Supabase yet, so it will be gone for good.')) return;
+          state.pendingWorkouts = state.pendingWorkouts.filter(p => p.row.id !== id);
+          savePendingWorkouts();
+          render();
+          return;
+        }
         if (!confirm('Delete this workout from Supabase? This can\'t be undone.')) return;
         supabaseRestRequest('DELETE', `workouts?id=eq.${id}`).then(() => {
           showToast('Workout deleted');
@@ -2084,8 +2192,11 @@
         state.workout = null; state.tab = 'today';
         state.showWorkoutSummary = { name: workout.name, volume, completedSets, totalSets, elapsedLabel, previousVolume };
         if (state.mode === 'real' && state.session) {
+          // Outbox first, upload second — the workout is already safe and visible before any
+          // network call happens, so a failed upload can no longer lose it.
+          queueRealWorkout(workout, volume);
           render();
-          saveRealWorkout(workout, volume).then(() => fetchRealWorkouts()).then(render).catch(error => showToast(`Cloud save failed · ${error.message}`));
+          syncPendingWorkouts().then(blocked => { if (blocked) showToast("Saved on this device — couldn't reach Supabase, will keep retrying automatically."); });
         } else {
           state.history.unshift({ name: workout.name, meta: `Just now · ${elapsedLabel}`, metric: `${Math.round(volume).toLocaleString()} kg`, pr: '' });
           localStorage.setItem('liftlog_history', JSON.stringify(state.history));
@@ -2157,6 +2268,12 @@
     setInterval(refreshWeather, 20 * 60 * 1000);
     if (confirmedJustNow) { showToast(`Email confirmed — signed in as ${state.session.email}`); fetchRealWorkouts().then(render); }
     else if (state.mode === 'real' && state.session) fetchRealWorkouts().then(render);
+    // Keep trying to get the outbox up to Supabase: right now, whenever the connection comes back or
+    // the tab becomes visible again, and once a minute as a backstop.
+    syncPendingWorkouts();
+    window.addEventListener('online', () => syncPendingWorkouts());
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncPendingWorkouts(); });
+    setInterval(() => syncPendingWorkouts(), 60000);
   </script>
 </body>
 </html>
